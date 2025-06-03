@@ -209,12 +209,13 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
             </div>
 
             <div>
-              <Label htmlFor="companyInfo">Your business information...</Label>
+              <Label htmlFor="businessDescription">Business Description</Label>
               <Textarea
-                id="companyInfo"
-                value={formData.companyInfo}
-                onChange={(e) => setFormData(prev => ({ ...prev, companyInfo: e.target.value }))}
-                rows={3}
+                id="businessDescription"
+                placeholder="Enter your business description"
+                value={formData.businessDescription}
+                onChange={(e) => setFormData(prev => ({ ...prev, businessDescription: e.target.value }))}
+                rows={4}
               />
             </div>
 
@@ -439,17 +440,6 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
                   <Label htmlFor="partnership">Partnership</Label>
                 </div>
               </RadioGroup>
-            </div>
-
-            <div>
-              <Label htmlFor="businessDescription">Business Description</Label>
-              <Textarea
-                id="businessDescription"
-                placeholder="Enter your business description"
-                value={formData.businessDescription}
-                onChange={(e) => setFormData(prev => ({ ...prev, businessDescription: e.target.value }))}
-                rows={4}
-              />
             </div>
           </div>
 
