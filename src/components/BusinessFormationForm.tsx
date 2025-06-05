@@ -305,7 +305,6 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
                   value={formData.city}
                   onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
                   required
-                  readOnly
                 />
               </div>
 
