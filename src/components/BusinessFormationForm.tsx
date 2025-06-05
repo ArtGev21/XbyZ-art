@@ -1,5 +1,5 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
+import { Loader } from '@googlemaps/js-api-loader';
 
 interface Member {
   id: string;
@@ -22,6 +23,9 @@ interface BusinessFormData {
   companyInfo: string;
   businessAddress: string;
   addressLine2: string;
+  city: string;
+  state: string;
+  zipCode: string;
   businessEmail: string;
   phoneNumber: string;
   ownerName: string;
@@ -40,10 +44,11 @@ interface BusinessFormationFormProps {
 }
 
 export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: BusinessFormationFormProps) => {
+  const navigate = useNavigate();
   const { toast } = useToast();
-  const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showMemberForm, setShowMemberForm] = useState(false);
+  const [addressInput, setAddressInput] = useState<google.maps.places.Autocomplete | null>(null);
   const [newMember, setNewMember] = useState({
     name: '',
     address: '',
@@ -56,6 +61,9 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
     companyInfo: '',
     businessAddress: '',
     addressLine2: '',
+    city: '',
+    state: 'CA',
+    zipCode: '',
     businessEmail: '',
     phoneNumber: '',
     ownerName: '',
@@ -66,6 +74,69 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
     businessDescription: '',
     members: []
   });
+
+  useEffect(() => {
+    const loader = new Loader({
+      apiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+      version: "weekly",
+      libraries: ["places"]
+    });
+
+    loader.load().then(() => {
+      const input = document.getElementById('businessAddress') as HTMLInputElement;
+      const autocomplete = new google.maps.places.Autocomplete(input, {
+        componentRestrictions: { country: 'us' },
+        fields: ['address_components']
+      });
+
+      setAddressInput(autocomplete);
+
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (place.address_components) {
+          let zipCode = '';
+          let city = '';
+          let state = '';
+
+          place.address_components.forEach(component => {
+            if (component.types.includes('postal_code')) {
+              zipCode = component.long_name;
+            }
+            if (component.types.includes('locality')) {
+              city = component.long_name;
+            }
+            if (component.types.includes('administrative_area_level_1')) {
+              state = component.short_name;
+            }
+          });
+
+          if (state !== 'CA') {
+            toast({
+              title: "Invalid Address",
+              description: "Please enter a California address only.",
+              variant: "destructive",
+            });
+            setFormData(prev => ({
+              ...prev,
+              businessAddress: '',
+              city: '',
+              state: 'CA',
+              zipCode: ''
+            }));
+            return;
+          }
+
+          setFormData(prev => ({
+            ...prev,
+            businessAddress: input.value,
+            city,
+            state,
+            zipCode
+          }));
+        }
+      });
+    });
+  }, [toast]);
 
   const handleAddMember = () => {
     if (!newMember.name || !newMember.email) {
@@ -95,11 +166,6 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
     });
 
     setShowMemberForm(false);
-
-    toast({
-      title: "Member Added",
-      description: `${member.name} has been added to your business.`,
-    });
   };
 
   const handleRemoveMember = (memberId: string) => {
@@ -109,25 +175,33 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
     }));
   };
 
+  const validateZipCode = (zipCode: string) => {
+    // California ZIP codes range from 90001 to 96162
+    const zipNumber = parseInt(zipCode, 10);
+    return zipNumber >= 90001 && zipNumber <= 96162;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      console.log('Form submitted:', formData);
+      if (!validateZipCode(formData.zipCode)) {
+        toast({
+          title: "Invalid ZIP Code",
+          description: "Please enter a valid California ZIP code.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Store form data in session storage
+      sessionStorage.setItem('businessFormData', JSON.stringify(formData));
       
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Navigate to pricing page
+      navigate('/pricing');
       
-      toast({
-        title: "Form Submitted Successfully",
-        description: "Your business formation request has been sent to our team.",
-      });
-      
-      setIsSubmitted(true);
-      setTimeout(() => {
-        handleClose();
-        onSubmitted?.();
-      }, 2000);
     } catch (error) {
       toast({
         title: "Submission Error",
@@ -136,11 +210,12 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
       });
     } finally {
       setIsLoading(false);
+      onClose();
+      onSubmitted?.();
     }
   };
 
   const handleClose = () => {
-    setIsSubmitted(false);
     setShowMemberForm(false);
     setNewMember({
       name: '',
@@ -153,6 +228,9 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
       companyInfo: '',
       businessAddress: '',
       addressLine2: '',
+      city: '',
+      state: 'CA',
+      zipCode: '',
       businessEmail: '',
       phoneNumber: '',
       ownerName: '',
@@ -165,26 +243,6 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
     });
     onClose();
   };
-
-  if (isSubmitted) {
-    return (
-      <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="max-w-md">
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Thank You!</h3>
-            <p className="text-gray-600 mb-6">
-              Your business formation request has been submitted successfully. Our team will review your information and contact you within 24-48 hours.
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -199,7 +257,7 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
             <h3 className="text-lg font-semibold text-custom-rich-black">Business Information</h3>
 
             <div>
-              <Label htmlFor="businessName">Your Business Name*</Label>
+              <Label htmlFor="businessName">Business Name*</Label>
               <Input
                 id="businessName"
                 value={formData.businessName}
@@ -220,11 +278,12 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
             </div>
 
             <div>
-              <Label htmlFor="businessAddress">Business Address*</Label>
+              <Label htmlFor="businessAddress">Business Address* (California Only)</Label>
               <Input
                 id="businessAddress"
                 value={formData.businessAddress}
                 onChange={(e) => setFormData(prev => ({ ...prev, businessAddress: e.target.value }))}
+                placeholder="Enter your California address"
                 required
               />
             </div>
@@ -236,6 +295,41 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
                 value={formData.addressLine2}
                 onChange={(e) => setFormData(prev => ({ ...prev, addressLine2: e.target.value }))}
               />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="city">City*</Label>
+                <Input
+                  id="city"
+                  value={formData.city}
+                  onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                  required
+                  readOnly
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="state">State*</Label>
+                <Input
+                  id="state"
+                  value={formData.state}
+                  readOnly
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="zipCode">ZIP Code*</Label>
+                <Input
+                  id="zipCode"
+                  value={formData.zipCode}
+                  onChange={(e) => setFormData(prev => ({ ...prev, zipCode: e.target.value }))}
+                  required
+                  pattern="9[0-9]{4}"
+                  title="Please enter a valid California ZIP code"
+                />
+              </div>
             </div>
 
             <div>
@@ -370,7 +464,7 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
 
           {/* Owner Information */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">A little bit more...</h3>
+            <h3 className="text-lg font-semibold">Owner Information</h3>
             
             <div>
               <Label htmlFor="ownerName">Owner/Organizer name*</Label>
@@ -447,8 +541,8 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
             <Button type="button" variant="outline" onClick={handleClose} className="flex-1 hover:bg-custom-dark-maroon">
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading} className="flex-1 flex-1 bg-custom-dark-maroon hover:bg-custom-deep-maroon">
-              {isLoading ? 'Submitting...' : 'Submit Form'}
+            <Button type="submit" disabled={isLoading} className="flex-1 bg-custom-dark-maroon hover:bg-custom-deep-maroon">
+              {isLoading ? 'Processing...' : 'Next'}
             </Button>
           </div>
         </form>
