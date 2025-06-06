@@ -1,7 +1,7 @@
-
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
+import { useNavigate } from 'react-router-dom';
 
 interface PricingPackagesProps {
   isOpen: boolean;
@@ -9,48 +9,130 @@ interface PricingPackagesProps {
 }
 
 export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
+  const navigate = useNavigate();
+  const [businessType, setBusinessType] = useState<string>('');
+
+  useEffect(() => {
+    // Get business type from session storage
+    const formData = sessionStorage.getItem('businessFormData');
+    if (formData) {
+      const { businessType } = JSON.parse(formData);
+      setBusinessType(businessType);
+    }
+  }, []);
+
   if (!isOpen) return null;
 
-  const packages = [
-    {
-      name: "Basic",
-      price: "$299",
-      description: "Perfect for getting started",
-      features: [
-        "Business Registration",
-        "Basic Legal Documents",
-        "Email Support",
-        "1 Year Registered Agent"
-      ]
-    },
-    {
-      name: "Professional",
-      price: "$599",
-      description: "Most popular choice",
-      features: [
-        "Everything in Basic",
-        "EIN Number",
-        "Operating Agreement",
-        "Phone Support",
-        "2 Years Registered Agent",
-        "Banking Assistance"
-      ],
-      popular: true
-    },
-    {
-      name: "Premium",
-      price: "$999",
-      description: "Complete business package",
-      features: [
-        "Everything in Professional",
-        "Business License Research",
-        "Trademark Search",
-        "Priority Support",
-        "3 Years Registered Agent",
-        "Tax Consultation"
-      ]
+  const getPackagesForType = () => {
+    switch (businessType.toLowerCase()) {
+      case 'llc':
+        return [
+          {
+            name: "Express LLC",
+            price: "$499",
+            description: "Fast-track LLC formation",
+            features: [
+              "Same-day processing",
+              "Priority support",
+              "All standard features",
+              "Express filing"
+            ],
+            isExpress: true
+          },
+          {
+            name: "Standard LLC",
+            price: "$99",
+            description: "Basic LLC formation",
+            features: [
+              "State filing",
+              "Operating agreement",
+              "Tax ID",
+              "Basic support"
+            ],
+            isExpress: false
+          }
+        ];
+      case 'corporation':
+        return [
+          {
+            name: "Express Corporation",
+            price: "$499",
+            description: "Fast-track incorporation",
+            features: [
+              "Same-day processing",
+              "Priority support",
+              "All standard features",
+              "Express filing"
+            ],
+            isExpress: true
+          },
+          {
+            name: "Standard Corporation",
+            price: "$125",
+            description: "Basic incorporation",
+            features: [
+              "State filing",
+              "Bylaws",
+              "Tax ID",
+              "Basic support"
+            ],
+            isExpress: false
+          }
+        ];
+      case 'partnership':
+        return [
+          {
+            name: "Express Partnership",
+            price: "$499",
+            description: "Fast-track partnership formation",
+            features: [
+              "Same-day processing",
+              "Priority support",
+              "All standard features",
+              "Express filing"
+            ],
+            isExpress: true
+          },
+          {
+            name: "Standard Partnership",
+            price: "$99",
+            description: "Basic partnership formation",
+            features: [
+              "State filing",
+              "Partnership agreement",
+              "Tax ID",
+              "Basic support"
+            ],
+            isExpress: false
+          }
+        ];
+      case 'sole_proprietorship':
+        return [
+          {
+            name: "DBA Registration",
+            price: "$100",
+            description: "DBA filing for different business name",
+            features: [
+              "DBA filing",
+              "Name search",
+              "Basic support",
+              "Processing within 5-7 days"
+            ],
+            isExpress: false
+          }
+        ];
+      default:
+        return [];
     }
-  ];
+  };
+
+  const handlePackageSelect = (isExpress: boolean) => {
+    // For development, just navigate to dashboard
+    navigate('/dashboard');
+    onClose();
+  };
+
+  const packages = getPackagesForType();
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
@@ -61,24 +143,24 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
               Choose Your Package
             </h2>
             <p className="text-gray-600">
-              Select the perfect plan to get your business started
+              Select the perfect plan for your {businessType?.toLowerCase().replace('_', ' ')}
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {packages.map((pkg, index) => (
               <div
                 key={index}
                 className={`relative rounded-lg border-2 p-6 ${
-                  pkg.popular 
+                  pkg.isExpress 
                     ? 'border-custom-dark-maroon bg-custom-dark-maroon/5' 
                     : 'border-gray-200'
                 }`}
               >
-                {pkg.popular && (
+                {pkg.isExpress && (
                   <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                     <span className="bg-custom-dark-maroon text-white px-4 py-1 rounded-full text-sm font-medium">
-                      Most Popular
+                      Express Service
                     </span>
                   </div>
                 )}
@@ -101,13 +183,14 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
                 </ul>
 
                 <Button 
+                  onClick={() => handlePackageSelect(pkg.isExpress)}
                   className={`w-full ${
-                    pkg.popular 
+                    pkg.isExpress 
                       ? 'bg-custom-dark-maroon hover:bg-custom-deep-maroon' 
                       : 'bg-gray-800 hover:bg-gray-900'
                   }`}
                 >
-                  Get Started
+                  Select Package
                 </Button>
               </div>
             ))}
