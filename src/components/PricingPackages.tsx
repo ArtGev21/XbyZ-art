@@ -35,7 +35,8 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
               "Same-day processing",
               "Priority support",
               "All standard features",
-              "Express filing"
+              "Express filing",
+              "5 business hours response"
             ],
             isExpress: true
           },
@@ -47,7 +48,8 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
               "State filing",
               "Operating agreement",
               "Tax ID",
-              "Basic support"
+              "Basic support",
+              "5 business days response"
             ],
             isExpress: false
           }
@@ -62,7 +64,8 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
               "Same-day processing",
               "Priority support",
               "All standard features",
-              "Express filing"
+              "Express filing",
+              "5 business hours response"
             ],
             isExpress: true
           },
@@ -74,7 +77,8 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
               "State filing",
               "Bylaws",
               "Tax ID",
-              "Basic support"
+              "Basic support",
+              "5 business days response"
             ],
             isExpress: false
           }
@@ -89,7 +93,8 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
               "Same-day processing",
               "Priority support",
               "All standard features",
-              "Express filing"
+              "Express filing",
+              "5 business hours response"
             ],
             isExpress: true
           },
@@ -101,7 +106,8 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
               "State filing",
               "Partnership agreement",
               "Tax ID",
-              "Basic support"
+              "Basic support",
+              "5 business days response"
             ],
             isExpress: false
           }
@@ -116,7 +122,8 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
               "DBA filing",
               "Name search",
               "Basic support",
-              "Processing within 5-7 days"
+              "Processing within 5-7 days",
+              "5 business days response"
             ],
             isExpress: false
           }
@@ -126,7 +133,17 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
     }
   };
 
-  const handlePackageSelect = (isExpress: boolean) => {
+  const handlePackageSelect = () => {
+    // Store the form data in session storage
+    const formData = sessionStorage.getItem('businessFormData');
+    if (formData) {
+      const updatedFormData = {
+        ...JSON.parse(formData),
+        // Add any additional package-related data here
+      };
+      sessionStorage.setItem('businessFormData', JSON.stringify(updatedFormData));
+    }
+
     // For development, just navigate to dashboard
     navigate('/dashboard');
     onClose();
@@ -140,14 +157,17 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
         <div className="p-8">
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold text-custom-dark-maroon mb-4">
-              Choose Your Package
+              {businessType === 'sole_proprietorship' ? 'Available Package' : 'Choose Your Package'}
             </h2>
             <p className="text-gray-600">
-              Select the perfect plan for your {businessType?.toLowerCase().replace('_', ' ')}
+              {businessType === 'sole_proprietorship' 
+                ? 'Registration package for your sole proprietorship'
+                : `Select the perfect plan for your ${businessType?.toLowerCase().replace('_', ' ')}`
+              }
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className={`grid grid-cols-1 ${packages.length > 1 ? 'md:grid-cols-2' : ''} gap-8`}>
             {packages.map((pkg, index) => (
               <div
                 key={index}
@@ -183,14 +203,14 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
                 </ul>
 
                 <Button 
-                  onClick={() => handlePackageSelect(pkg.isExpress)}
+                  onClick={handlePackageSelect}
                   className={`w-full ${
                     pkg.isExpress 
                       ? 'bg-custom-dark-maroon hover:bg-custom-deep-maroon' 
                       : 'bg-gray-800 hover:bg-gray-900'
                   }`}
                 >
-                  Select Package
+                  Continue
                 </Button>
               </div>
             ))}
