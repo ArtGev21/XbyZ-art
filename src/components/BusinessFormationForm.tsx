@@ -8,7 +8,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2 } from "lucide-react";
-import { Loader } from '@googlemaps/js-api-loader';
 
 interface Member {
   id: string;
@@ -48,7 +47,6 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [showMemberForm, setShowMemberForm] = useState(false);
-  const [addressInput, setAddressInput] = useState<google.maps.places.Autocomplete | null>(null);
   const [newMember, setNewMember] = useState({
     name: '',
     address: '',
@@ -74,81 +72,6 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
     businessDescription: '',
     members: []
   });
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const initializeGoogleMaps = async () => {
-      try {
-        const loader = new Loader({
-          apiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
-          version: "weekly",
-          libraries: ["places"]
-        });
-
-        await loader.load();
-        
-        const input = document.getElementById('businessAddress') as HTMLInputElement;
-        if (input) {
-          const autocomplete = new google.maps.places.Autocomplete(input, {
-            componentRestrictions: { country: 'us' },
-            fields: ['address_components', 'formatted_address']
-          });
-
-          setAddressInput(autocomplete);
-
-          autocomplete.addListener('place_changed', () => {
-            const place = autocomplete.getPlace();
-            if (place.address_components) {
-              let zipCode = '';
-              let city = '';
-              let state = '';
-
-              place.address_components.forEach(component => {
-                if (component.types.includes('postal_code')) {
-                  zipCode = component.long_name;
-                }
-                if (component.types.includes('locality')) {
-                  city = component.long_name;
-                }
-                if (component.types.includes('administrative_area_level_1')) {
-                  state = component.short_name;
-                }
-              });
-
-              if (state !== 'CA') {
-                toast({
-                  title: "Invalid Address",
-                  description: "Please enter a California address only.",
-                  variant: "destructive",
-                });
-                setFormData(prev => ({
-                  ...prev,
-                  businessAddress: '',
-                  city: '',
-                  state: 'CA',
-                  zipCode: ''
-                }));
-                return;
-              }
-
-              setFormData(prev => ({
-                ...prev,
-                businessAddress: place.formatted_address || input.value,
-                city,
-                state,
-                zipCode
-              }));
-            }
-          });
-        }
-      } catch (error) {
-        console.error('Error initializing Google Maps:', error);
-      }
-    };
-
-    initializeGoogleMaps();
-  }, [isOpen, toast]);
 
   const handleAddMember = () => {
     if (!newMember.name || !newMember.email) {
