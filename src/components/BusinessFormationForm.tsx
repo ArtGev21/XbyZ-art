@@ -76,67 +76,79 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
   });
 
   useEffect(() => {
-    const loader = new Loader({
-      apiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-      version: "weekly",
-      libraries: ["places"]
-    });
+    if (!isOpen) return;
 
-    loader.load().then(() => {
-      const input = document.getElementById('businessAddress') as HTMLInputElement;
-      const autocomplete = new google.maps.places.Autocomplete(input, {
-        componentRestrictions: { country: 'us' },
-        fields: ['address_components']
-      });
+    const initializeGoogleMaps = async () => {
+      try {
+        const loader = new Loader({
+          apiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
+          version: "weekly",
+          libraries: ["places"]
+        });
 
-      setAddressInput(autocomplete);
-
-      autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace();
-        if (place.address_components) {
-          let zipCode = '';
-          let city = '';
-          let state = '';
-
-          place.address_components.forEach(component => {
-            if (component.types.includes('postal_code')) {
-              zipCode = component.long_name;
-            }
-            if (component.types.includes('locality')) {
-              city = component.long_name;
-            }
-            if (component.types.includes('administrative_area_level_1')) {
-              state = component.short_name;
-            }
+        await loader.load();
+        
+        const input = document.getElementById('businessAddress') as HTMLInputElement;
+        if (input) {
+          const autocomplete = new google.maps.places.Autocomplete(input, {
+            componentRestrictions: { country: 'us' },
+            fields: ['address_components', 'formatted_address']
           });
 
-          if (state !== 'CA') {
-            toast({
-              title: "Invalid Address",
-              description: "Please enter a California address only.",
-              variant: "destructive",
-            });
-            setFormData(prev => ({
-              ...prev,
-              businessAddress: '',
-              city: '',
-              state: 'CA',
-              zipCode: ''
-            }));
-            return;
-          }
+          setAddressInput(autocomplete);
 
-          setFormData(prev => ({
-            ...prev,
-            businessAddress: input.value,
-            city,
-            state,
-            zipCode
-          }));
+          autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            if (place.address_components) {
+              let zipCode = '';
+              let city = '';
+              let state = '';
+
+              place.address_components.forEach(component => {
+                if (component.types.includes('postal_code')) {
+                  zipCode = component.long_name;
+                }
+                if (component.types.includes('locality')) {
+                  city = component.long_name;
+                }
+                if (component.types.includes('administrative_area_level_1')) {
+                  state = component.short_name;
+                }
+              });
+
+              if (state !== 'CA') {
+                toast({
+                  title: "Invalid Address",
+                  description: "Please enter a California address only.",
+                  variant: "destructive",
+                });
+                setFormData(prev => ({
+                  ...prev,
+                  businessAddress: '',
+                  city: '',
+                  state: 'CA',
+                  zipCode: ''
+                }));
+                return;
+              }
+
+              setFormData(prev => ({
+                ...prev,
+                businessAddress: place.formatted_address || input.value,
+                city,
+                state,
+                zipCode
+              }));
+            }
+          });
         }
-      });
-    });
-  }, [toast]);
+      } catch (error) {
+        console.error('Error initializing Google Maps:', error);
+      }
+    };
+
+    initializeGoogleMaps();
+  }, [isOpen, toast]);
 
   const handleAddMember = () => {
     if (!newMember.name || !newMember.email) {
@@ -181,37 +193,142 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
     return zipNumber >= 90001 && zipNumber <= 96162;
   };
 
+  const validateForm = () => {
+    if (!formData.businessName.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Business name is required.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (!formData.businessAddress.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Business address is required.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (!formData.city.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "City is required.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (!formData.zipCode.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "ZIP code is required.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (!validateZipCode(formData.zipCode)) {
+      toast({
+        title: "Invalid ZIP Code",
+        description: "Please enter a valid California ZIP code.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (!formData.businessEmail.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Business email is required.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (!formData.phoneNumber.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Phone number is required.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (!formData.ownerName.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Owner name is required.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (!formData.ownerAddress.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Owner address is required.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (!formData.ownerEmail.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Owner email is required.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (!formData.businessType) {
+      toast({
+        title: "Missing Information",
+        description: "Please select a business type.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      if (!validateZipCode(formData.zipCode)) {
-        toast({
-          title: "Invalid ZIP Code",
-          description: "Please enter a valid California ZIP code.",
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        return;
-      }
-
       // Store form data in session storage
       sessionStorage.setItem('businessFormData', JSON.stringify(formData));
       
-      // Navigate to pricing page
-      navigate('/pricing');
+      toast({
+        title: "Form Saved",
+        description: "Your business information has been saved. Proceeding to pricing...",
+      });
+
+      // Close the form and trigger the pricing modal
+      onClose();
+      if (onSubmitted) {
+        onSubmitted();
+      }
       
     } catch (error) {
+      console.error('Error saving form data:', error);
       toast({
-        title: "Submission Error",
-        description: "There was an error submitting your form. Please try again.",
+        title: "Error",
+        description: "There was an error saving your form. Please try again.",
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
-      onClose();
-      onSubmitted?.();
     }
   };
 
@@ -222,24 +339,6 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
       address: '',
       phone: '',
       email: ''
-    });
-    setFormData({
-      businessName: '',
-      companyInfo: '',
-      businessAddress: '',
-      addressLine2: '',
-      city: '',
-      state: 'CA',
-      zipCode: '',
-      businessEmail: '',
-      phoneNumber: '',
-      ownerName: '',
-      ownerAddress: '',
-      ssnItin: '',
-      ownerEmail: '',
-      businessType: '',
-      businessDescription: '',
-      members: []
     });
     onClose();
   };
@@ -537,7 +636,7 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
           </div>
 
           <div className="flex gap-4 pt-6">
-            <Button type="button" variant="outline" onClick={handleClose} className="flex-1 hover:bg-custom-dark-maroon">
+            <Button type="button" variant="outline" onClick={handleClose} className="flex-1">
               Cancel
             </Button>
             <Button type="submit" disabled={isLoading} className="flex-1 bg-custom-dark-maroon hover:bg-custom-deep-maroon">
