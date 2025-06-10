@@ -227,7 +227,7 @@ export const Dashboard = () => {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b h-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 justify-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 justify-center itme-center">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <img src="/Logo-cropped.png" alt="XByzeth Logo" className="h-12 w-auto" />
