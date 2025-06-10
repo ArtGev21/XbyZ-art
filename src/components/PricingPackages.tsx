@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from "@/contexts/AuthContext";
 
 interface PricingPackagesProps {
   isOpen: boolean;
@@ -10,7 +13,10 @@ interface PricingPackagesProps {
 
 export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { user } = useAuth();
   const [businessType, setBusinessType] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     // Get business type from session storage
@@ -137,28 +143,96 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
     }
   };
 
-  const handlePackageSelect = (packageName: string) => {
-    // Store the selected package in session storage for development
-    const formData = sessionStorage.getItem('businessFormData');
-    if (formData) {
-      try {
-        const parsedData = JSON.parse(formData);
-        const updatedFormData = {
-          ...parsedData,
-          selectedPackage: packageName
-        };
-        sessionStorage.setItem('businessFormData', JSON.stringify(updatedFormData));
-      } catch (error) {
-        console.error('Error updating form data:', error);
-      }
+  const handlePackageSelect = async (packageName: string) => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to continue.",
+        variant: "destructive",
+      });
+      return;
     }
 
-    // For development, just close the modal and navigate
-    onClose();
-    // You can uncomment this line when you want to navigate to dashboard
-    // navigate('/dashboard');
-    
-    console.log('Package selected for development:', packageName);
+    setIsLoading(true);
+
+    try {
+      // Get form data from session storage
+      const formData = sessionStorage.getItem('businessFormData');
+      if (!formData) {
+        throw new Error('No form data found');
+      }
+
+      const parsedFormData = JSON.parse(formData);
+
+      // Create business profile
+      const businessProfileData = {
+        user_id: user.id,
+        business_name: parsedFormData.businessName,
+        business_type: parsedFormData.businessType.toLowerCase().replace(' ', '_'),
+        address_line1: parsedFormData.businessAddress,
+        address_line2: parsedFormData.addressLine2 || null,
+        city: parsedFormData.city,
+        state: parsedFormData.state,
+        zip_code: parsedFormData.zipCode,
+        phone: parsedFormData.phoneNumber,
+        email: parsedFormData.businessEmail,
+        tax_id: parsedFormData.ssnItin || null,
+        description: parsedFormData.businessDescription || null,
+        status: 'submitted'
+      };
+
+      const { data: businessProfile, error: profileError } = await supabase
+        .from('business_profiles')
+        .insert([businessProfileData])
+        .select()
+        .single();
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      // Store additional data in localStorage for dashboard
+      const dashboardData = {
+        businessProfile: businessProfile,
+        ownerInfo: {
+          name: parsedFormData.ownerName,
+          address: parsedFormData.ownerAddress,
+          email: parsedFormData.ownerEmail,
+          ssnItin: parsedFormData.ssnItin
+        },
+        members: parsedFormData.members || [],
+        selectedPackage: packageName
+      };
+
+      localStorage.setItem('dashboardData', JSON.stringify(dashboardData));
+
+      // Clear session storage
+      sessionStorage.removeItem('businessFormData');
+
+      // TODO: Implement payment processing here
+      // const paymentResult = await processPayment(packageName, businessProfile.id);
+      // if (!paymentResult.success) {
+      //   throw new Error('Payment failed');
+      // }
+
+      toast({
+        title: "Registration Successful",
+        description: "Your business information has been saved successfully!",
+      });
+
+      // Navigate to dashboard
+      navigate('/dashboard');
+
+    } catch (error) {
+      console.error('Error saving business profile:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save your information. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const packages = getPackagesForType();
@@ -236,14 +310,14 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
 
                 <Button 
                   onClick={() => handlePackageSelect(pkg.name)}
-                  disabled={true}
+                  disabled={isLoading}
                   className={`w-full ${
                     pkg.isExpress 
                       ? 'bg-custom-dark-maroon hover:bg-custom-deep-maroon' 
                       : 'bg-gray-800 hover:bg-gray-900'
-                  } opacity-50 cursor-not-allowed`}
+                  }`}
                 >
-                  Continue (Development Mode)
+                  {isLoading ? 'Processing...' : 'Continue'}
                 </Button>
               </div>
             ))}
@@ -253,9 +327,6 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
             <Button variant="outline" onClick={onClose}>
               Close
             </Button>
-            <p className="text-sm text-gray-500 mt-2">
-              Payment processing is disabled for development
-            </p>
           </div>
         </div>
       </div>
