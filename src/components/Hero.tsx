@@ -1,15 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { BusinessFormationForm } from "@/components/BusinessFormationForm";
 import { AuthModal } from "@/components/AuthModal";
 import { PricingPackages } from "@/components/PricingPackages";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 export const Hero = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isPricingOpen, setIsPricingOpen] = useState(false);
+  const [hasSubmittedInfo, setHasSubmittedInfo] = useState(false);
   const { isAuthenticated, logout, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check if user has submitted information
+    const dashboardData = localStorage.getItem('dashboardData');
+    setHasSubmittedInfo(!!dashboardData);
+  }, [isAuthenticated]);
 
   const handleGetStarted = () => {
     if (isAuthenticated) {
@@ -17,6 +26,10 @@ export const Hero = () => {
     } else {
       setIsAuthModalOpen(true);
     }
+  };
+
+  const handleDashboard = () => {
+    navigate('/dashboard');
   };
 
   const handleFormSubmitted = () => {
@@ -62,13 +75,23 @@ export const Hero = () => {
                   Must have solutions for your business...
                 </p>
                 <div className="flex justify-center gap-4">
-                  <Button 
-                    onClick={handleGetStarted}
-                    size="lg" 
-                    className="text-custom-medium-gray font-light bg-custom-dark-maroon hover:bg-custom-deep-maroon text-white px-8 py-3 text-lg rounded-full hover:scale-105 transition-transform duration-300"
-                  >
-                    Get Started
-                  </Button>
+                  {isAuthenticated && hasSubmittedInfo ? (
+                    <Button 
+                      onClick={handleDashboard}
+                      size="lg" 
+                      className="text-custom-medium-gray font-light bg-custom-dark-maroon hover:bg-custom-deep-maroon text-white px-8 py-3 text-lg rounded-full hover:scale-105 transition-transform duration-300"
+                    >
+                      Dashboard
+                    </Button>
+                  ) : (
+                    <Button 
+                      onClick={handleGetStarted}
+                      size="lg" 
+                      className="text-custom-medium-gray font-light bg-custom-dark-maroon hover:bg-custom-deep-maroon text-white px-8 py-3 text-lg rounded-full hover:scale-105 transition-transform duration-300"
+                    >
+                      Get Started
+                    </Button>
+                  )}
                   {isAuthenticated && (
                     <Button 
                       onClick={logout}

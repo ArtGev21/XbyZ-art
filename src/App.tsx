@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import { Dashboard } from "./pages/Dashboard";
+import { AdminDashboard } from "./pages/AdminDashboard";
 import { RegistrationForm } from "./components/RegistrationForm";
 import { PricingPage } from "./components/PricingPage";
 import NotFound from "./pages/NotFound";
@@ -24,6 +25,7 @@ const App = () => (
             <Route path="/register" element={<RegistrationForm />} />
             <Route path="/pricing" element={<PricingPage />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/admin" element={<AdminDashboard />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -1,7 +1,7 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
 
 interface AuthContextType {
   user: User | null;
@@ -40,6 +40,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+
+        // Handle admin redirect
+        if (session?.user?.email === 'info@xbyzeth.com' && event === 'SIGNED_IN') {
+          // Check if we're not already on admin page to avoid infinite redirects
+          if (!window.location.pathname.includes('/admin')) {
+            window.location.href = '/admin';
+          }
+        }
       }
     );
 
@@ -48,6 +56,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+
+      // Handle admin redirect on initial load
+      if (session?.user?.email === 'info@xbyzeth.com') {
+        if (!window.location.pathname.includes('/admin')) {
+          window.location.href = '/admin';
+        }
+      }
     });
 
     return () => subscription.unsubscribe();

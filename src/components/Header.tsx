@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { BusinessFormationForm } from "@/components/BusinessFormationForm";
 import { AuthModal } from "@/components/AuthModal";
 import { PricingPackages } from "@/components/PricingPackages";
+import { useNavigate } from "react-router-dom";
 
 export const Header = () => {
   const { isAuthenticated, logout, loading } = useAuth();
@@ -13,10 +14,22 @@ export const Header = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isPricingOpen, setIsPricingOpen] = useState(false);
+  const [hasSubmittedInfo, setHasSubmittedInfo] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check if user has submitted information
+    const dashboardData = localStorage.getItem('dashboardData');
+    setHasSubmittedInfo(!!dashboardData);
+  }, [isAuthenticated]);
 
   const handleGetStarted = () => {
     if (isAuthenticated) {
-      setIsFormOpen(true);
+      if (hasSubmittedInfo) {
+        navigate('/dashboard');
+      } else {
+        setIsFormOpen(true);
+      }
     } else {
       setIsAuthModalOpen(true);
     }
@@ -108,7 +121,7 @@ export const Header = () => {
               size="lg" 
               className="text-custom-medium-gray font-light bg-custom-dark-maroon hover:bg-custom-deep-maroon text-white px-4 py-2 text-sm rounded-full hover:scale-105 transition-transform duration-300"
             >
-              Get Started
+              {isAuthenticated && hasSubmittedInfo ? 'Dashboard' : 'Get Started'}
             </Button>
             
             {isAuthenticated && (
@@ -129,7 +142,7 @@ export const Header = () => {
               size="sm"
               className="text-custom-medium-gray font-light bg-custom-dark-maroon hover:bg-custom-deep-maroon text-white px-3 py-1 text-xs rounded-full hover:scale-105 transition-transform duration-300"
             >
-              Get Started
+              {isAuthenticated && hasSubmittedInfo ? 'Dashboard' : 'Get Started'}
             </Button>
             {isAuthenticated && (
               <Button 
