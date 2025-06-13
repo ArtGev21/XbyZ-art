@@ -8,7 +8,7 @@ import { PricingPackages } from "@/components/PricingPackages";
 import { useNavigate, useLocation } from "react-router-dom";
 
 export const Header = () => {
-  const { isAuthenticated, logout, loading } = useAuth();
+  const { isAuthenticated, logout, loading, isAdmin } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -26,7 +26,10 @@ export const Header = () => {
 
   const handleGetStarted = () => {
     if (isAuthenticated) {
-      if (hasSubmittedInfo) {
+      // Check if user is admin and redirect accordingly
+      if (isAdmin) {
+        navigate('/admin');
+      } else if (hasSubmittedInfo) {
         navigate('/dashboard');
       } else {
         setIsFormOpen(true);
@@ -85,6 +88,14 @@ export const Header = () => {
     );
   }
 
+  // Determine button text based on user type and status
+  const getButtonText = () => {
+    if (!isAuthenticated) return 'Get Started';
+    if (isAdmin) return 'Admin Dashboard';
+    if (hasSubmittedInfo) return 'Dashboard';
+    return 'Get Started';
+  };
+
   return (
     <header 
       className={`fixed w-full z-50 transition-colors duration-300 ${
@@ -141,7 +152,7 @@ export const Header = () => {
               size="lg" 
               className="text-custom-medium-gray font-light bg-custom-dark-maroon hover:bg-custom-deep-maroon text-white px-4 py-2 text-sm rounded-full hover:scale-105 transition-transform duration-300"
             >
-              {isAuthenticated && hasSubmittedInfo ? 'Dashboard' : 'Get Started'}
+              {getButtonText()}
             </Button>
             
             {isAuthenticated && (
@@ -162,7 +173,7 @@ export const Header = () => {
               size="sm"
               className="text-custom-medium-gray font-light bg-custom-dark-maroon hover:bg-custom-deep-maroon text-white px-3 py-1 text-xs rounded-full hover:scale-105 transition-transform duration-300"
             >
-              {isAuthenticated && hasSubmittedInfo ? 'Dashboard' : 'Get Started'}
+              {getButtonText()}
             </Button>
             {isAuthenticated && (
               <Button 
