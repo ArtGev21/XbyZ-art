@@ -18,24 +18,53 @@ import {
   Building2,
   User,
   Calendar,
-  Filter
+  Filter,
+  RefreshCw,
+  Eye,
+  Edit,
+  CheckCircle,
+  XCircle,
+  Clock,
+  AlertCircle
 } from 'lucide-react';
 
 interface BusinessProfile {
   id: string;
+  user_id: string;
   business_name: string;
   business_type: string;
-  email: string;
+  address_line1: string;
+  address_line2?: string;
+  city: string;
+  state: string;
+  zip_code: string;
   phone: string;
+  email: string;
+  tax_id?: string;
+  description?: string;
   status: string;
   created_at: string;
+  updated_at: string;
+}
+
+interface UserProfile {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  role: string;
+  created_at: string;
+}
+
+interface TeamMember {
+  id: string;
   user_id: string;
-  address_line1?: string;
-  address_line2?: string;
-  city?: string;
-  state?: string;
-  zip_code?: string;
-  description?: string;
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+  status: 'active' | 'inactive';
+  created_at: string;
 }
 
 interface Document {
@@ -57,10 +86,15 @@ export const AdminDashboard = () => {
   const [filteredProfiles, setFilteredProfiles] = useState<BusinessProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [businessTypeFilter, setBusinessTypeFilter] = useState('all');
   const [selectedProfile, setSelectedProfile] = useState<BusinessProfile | null>(null);
+  const [selectedUserProfile, setSelectedUserProfile] = useState<UserProfile | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(false);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('overview');
 
   // Check if user is admin
   useEffect(() => {
@@ -82,6 +116,22 @@ export const AdminDashboard = () => {
     }
 
     loadBusinessProfiles();
+    
+    // Set up real-time subscription for business profiles
+    const subscription = supabase
+      .channel('admin_business_profiles')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'business_profiles' },
+        (payload) => {
+          console.log('Business profile changed:', payload);
+          loadBusinessProfiles(); // Reload all profiles on any change
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [user, isAdmin, loading, navigate, toast]);
 
   const loadBusinessProfiles = async () => {
@@ -94,6 +144,7 @@ export const AdminDashboard = () => {
 
       if (error) throw error;
 
+      console.log('Loaded business profiles:', data);
       setBusinessProfiles(data || []);
       setFilteredProfiles(data || []);
     } catch (error) {
@@ -108,27 +159,72 @@ export const AdminDashboard = () => {
     }
   };
 
-  // Filter profiles based on search and status
+  // Filter profiles based on search and filters
   useEffect(() => {
     let filtered = businessProfiles;
 
+    // Search filter
     if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(profile => 
-        profile.business_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        profile.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        profile.business_type.toLowerCase().includes(searchTerm.toLowerCase())
+        profile.business_name.toLowerCase().includes(searchLower) ||
+        profile.email.toLowerCase().includes(searchLower) ||
+        profile.business_type.toLowerCase().includes(searchLower) ||
+        profile.phone.includes(searchTerm) ||
+        profile.city.toLowerCase().includes(searchLower) ||
+        profile.zip_code.includes(searchTerm)
       );
     }
 
+    // Status filter
     if (statusFilter !== 'all') {
       filtered = filtered.filter(profile => profile.status === statusFilter);
     }
 
+    // Business type filter
+    if (businessTypeFilter !== 'all') {
+      filtered = filtered.filter(profile => profile.business_type === businessTypeFilter);
+    }
+
     setFilteredProfiles(filtered);
-  }, [searchTerm, statusFilter, businessProfiles]);
+  }, [searchTerm, statusFilter, businessTypeFilter, businessProfiles]);
+
+  const loadUserProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+
+      setSelectedUserProfile(data);
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+      setSelectedUserProfile(null);
+    }
+  };
+
+  const loadTeamMembers = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('team_members')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setTeamMembers(data || []);
+    } catch (error) {
+      console.error('Error loading team members:', error);
+      setTeamMembers([]);
+    }
+  };
 
   const loadDocuments = async (profileId: string) => {
-    // Mock documents for demonstration
+    // Mock documents for demonstration - in a real app, this would come from a documents table
     const mockDocs: Document[] = [
       {
         id: '1',
@@ -163,9 +259,22 @@ export const AdminDashboard = () => {
     setDocuments(mockDocs);
   };
 
-  const handleProfileSelect = (profile: BusinessProfile) => {
+  const handleProfileSelect = async (profile: BusinessProfile) => {
     setSelectedProfile(profile);
-    loadDocuments(profile.id);
+    setIsLoadingDetails(true);
+    setActiveTab('overview');
+    
+    try {
+      await Promise.all([
+        loadUserProfile(profile.user_id),
+        loadTeamMembers(profile.user_id),
+        loadDocuments(profile.id)
+      ]);
+    } catch (error) {
+      console.error('Error loading profile details:', error);
+    } finally {
+      setIsLoadingDetails(false);
+    }
   };
 
   const handleDocumentUpload = async (docId: string, docName: string) => {
@@ -191,19 +300,27 @@ export const AdminDashboard = () => {
     try {
       const { error } = await supabase
         .from('business_profiles')
-        .update({ status: newStatus })
+        .update({ 
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', profileId);
 
       if (error) throw error;
 
+      // Update local state
       setBusinessProfiles(prev => prev.map(profile => 
         profile.id === profileId 
-          ? { ...profile, status: newStatus }
+          ? { ...profile, status: newStatus, updated_at: new Date().toISOString() }
           : profile
       ));
 
       if (selectedProfile?.id === profileId) {
-        setSelectedProfile(prev => prev ? { ...prev, status: newStatus } : null);
+        setSelectedProfile(prev => prev ? { 
+          ...prev, 
+          status: newStatus, 
+          updated_at: new Date().toISOString() 
+        } : null);
       }
 
       toast({
@@ -231,6 +348,17 @@ export const AdminDashboard = () => {
     }
   };
 
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'draft': return <Edit className="w-4 h-4" />;
+      case 'submitted': return <Clock className="w-4 h-4" />;
+      case 'in_review': return <AlertCircle className="w-4 h-4" />;
+      case 'approved': return <CheckCircle className="w-4 h-4" />;
+      case 'rejected': return <XCircle className="w-4 h-4" />;
+      default: return <Clock className="w-4 h-4" />;
+    }
+  };
+
   const getDocStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'text-yellow-600 bg-yellow-100';
@@ -238,6 +366,10 @@ export const AdminDashboard = () => {
       case 'completed': return 'text-blue-600 bg-blue-100';
       default: return 'text-gray-600 bg-gray-100';
     }
+  };
+
+  const formatBusinessType = (type: string) => {
+    return type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
   // Show loading screen while checking authentication
@@ -264,10 +396,77 @@ export const AdminDashboard = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
-            <p className="text-gray-600">Manage business applications and documents</p>
-            <div className="mt-2 text-sm text-gray-500">
-              Logged in as: <span className="font-medium">{user?.email}</span>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
+                <p className="text-gray-600">Manage business applications and documents</p>
+                <div className="mt-2 text-sm text-gray-500">
+                  Logged in as: <span className="font-medium">{user?.email}</span>
+                </div>
+              </div>
+              <Button
+                onClick={loadBusinessProfiles}
+                disabled={isLoadingProfiles}
+                variant="outline"
+                className="flex items-center space-x-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoadingProfiles ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </Button>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    <Building2 className="w-5 h-5 text-blue-600" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Total Applications</p>
+                      <p className="text-2xl font-bold text-gray-900">{businessProfiles.length}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    <Clock className="w-5 h-5 text-yellow-600" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Pending Review</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {businessProfiles.filter(p => p.status === 'submitted' || p.status === 'in_review').length}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Approved</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {businessProfiles.filter(p => p.status === 'approved').length}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    <XCircle className="w-5 h-5 text-red-600" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Rejected</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {businessProfiles.filter(p => p.status === 'rejected').length}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
 
@@ -278,7 +477,7 @@ export const AdminDashboard = () => {
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
                     <Building2 className="w-5 h-5" />
-                    <span>Business Applications</span>
+                    <span>Business Applications ({filteredProfiles.length})</span>
                   </CardTitle>
                   
                   {/* Search and Filter */}
@@ -286,26 +485,40 @@ export const AdminDashboard = () => {
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                       <Input
-                        placeholder="Search businesses..."
+                        placeholder="Search by name, email, phone, city..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="pl-10"
                       />
                     </div>
                     
-                    <div className="flex items-center space-x-2">
-                      <Filter className="w-4 h-4 text-gray-400" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center space-x-2">
+                        <Filter className="w-4 h-4 text-gray-400" />
+                        <select
+                          value={statusFilter}
+                          onChange={(e) => setStatusFilter(e.target.value)}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        >
+                          <option value="all">All Status</option>
+                          <option value="draft">Draft</option>
+                          <option value="submitted">Submitted</option>
+                          <option value="in_review">In Review</option>
+                          <option value="approved">Approved</option>
+                          <option value="rejected">Rejected</option>
+                        </select>
+                      </div>
+                      
                       <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
+                        value={businessTypeFilter}
+                        onChange={(e) => setBusinessTypeFilter(e.target.value)}
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       >
-                        <option value="all">All Status</option>
-                        <option value="draft">Draft</option>
-                        <option value="submitted">Submitted</option>
-                        <option value="in_review">In Review</option>
-                        <option value="approved">Approved</option>
-                        <option value="rejected">Rejected</option>
+                        <option value="all">All Types</option>
+                        <option value="llc">LLC</option>
+                        <option value="corporation">Corporation</option>
+                        <option value="partnership">Partnership</option>
+                        <option value="sole_proprietorship">Sole Proprietorship</option>
                       </select>
                     </div>
                   </div>
@@ -313,10 +526,13 @@ export const AdminDashboard = () => {
                 
                 <CardContent className="max-h-96 overflow-y-auto">
                   {isLoadingProfiles ? (
-                    <div className="text-center py-4">Loading businesses...</div>
+                    <div className="text-center py-4">
+                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-custom-dark-maroon" />
+                      <p>Loading applications...</p>
+                    </div>
                   ) : filteredProfiles.length === 0 ? (
                     <div className="text-center py-4 text-gray-500">
-                      {businessProfiles.length === 0 ? 'No businesses found' : 'No businesses match your search'}
+                      {businessProfiles.length === 0 ? 'No applications found' : 'No applications match your search'}
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -324,20 +540,25 @@ export const AdminDashboard = () => {
                         <div
                           key={profile.id}
                           onClick={() => handleProfileSelect(profile)}
-                          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                          className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
                             selectedProfile?.id === profile.id 
-                              ? 'border-custom-dark-maroon bg-custom-dark-maroon/5' 
+                              ? 'border-custom-dark-maroon bg-custom-dark-maroon/5 shadow-md' 
                               : 'border-gray-200 hover:border-gray-300'
                           }`}
                         >
-                          <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-medium text-gray-900 text-sm">{profile.business_name}</h4>
+                          <div className="flex justify-between items-start mb-3">
+                            <h4 className="font-semibold text-gray-900 text-sm">{profile.business_name}</h4>
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(profile.status)}`}>
-                              {profile.status.replace('_', ' ')}
+                              {getStatusIcon(profile.status)}
+                              <span className="ml-1">{profile.status.replace('_', ' ')}</span>
                             </span>
                           </div>
-                          <p className="text-xs text-gray-600 capitalize">{profile.business_type.replace('_', ' ')}</p>
-                          <p className="text-xs text-gray-500">{new Date(profile.created_at).toLocaleDateString()}</p>
+                          <div className="space-y-1">
+                            <p className="text-xs text-gray-600 capitalize">{formatBusinessType(profile.business_type)}</p>
+                            <p className="text-xs text-gray-500">{profile.email}</p>
+                            <p className="text-xs text-gray-500">{profile.city}, {profile.state}</p>
+                            <p className="text-xs text-gray-400">{new Date(profile.created_at).toLocaleDateString()}</p>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -350,13 +571,18 @@ export const AdminDashboard = () => {
             <div className="lg:col-span-2">
               {selectedProfile ? (
                 <div className="space-y-6">
-                  {/* Business Details */}
+                  {/* Business Header */}
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
-                      <CardTitle className="flex items-center space-x-2">
-                        <User className="w-5 h-5" />
-                        <span>{selectedProfile.business_name}</span>
-                      </CardTitle>
+                      <div>
+                        <CardTitle className="flex items-center space-x-2">
+                          <Building2 className="w-5 h-5" />
+                          <span>{selectedProfile.business_name}</span>
+                        </CardTitle>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {formatBusinessType(selectedProfile.business_type)} • Created {new Date(selectedProfile.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
                       <div className="flex items-center space-x-2">
                         <Label htmlFor="status-select" className="text-sm">Status:</Label>
                         <select
@@ -373,120 +599,239 @@ export const AdminDashboard = () => {
                         </select>
                       </div>
                     </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <Label className="text-sm font-medium text-gray-500">Business Type</Label>
-                          <p className="text-gray-900 capitalize">{selectedProfile.business_type.replace('_', ' ')}</p>
-                        </div>
-                        <div>
-                          <Label className="text-sm font-medium text-gray-500">Email</Label>
-                          <p className="text-gray-900">{selectedProfile.email}</p>
-                        </div>
-                        <div>
-                          <Label className="text-sm font-medium text-gray-500">Phone</Label>
-                          <p className="text-gray-900">{selectedProfile.phone}</p>
-                        </div>
-                        <div>
-                          <Label className="text-sm font-medium text-gray-500">Submitted</Label>
-                          <p className="text-gray-900">{new Date(selectedProfile.created_at).toLocaleDateString()}</p>
-                        </div>
-                        {selectedProfile.address_line1 && (
-                          <div className="md:col-span-2">
-                            <Label className="text-sm font-medium text-gray-500">Address</Label>
-                            <p className="text-gray-900">
-                              {selectedProfile.address_line1}
-                              {selectedProfile.address_line2 && <>, {selectedProfile.address_line2}</>}
-                              <br />
-                              {selectedProfile.city}, {selectedProfile.state} {selectedProfile.zip_code}
-                            </p>
-                          </div>
-                        )}
-                        {selectedProfile.description && (
-                          <div className="md:col-span-2">
-                            <Label className="text-sm font-medium text-gray-500">Description</Label>
-                            <p className="text-gray-900">{selectedProfile.description}</p>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
                   </Card>
 
-                  {/* Document Management */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center space-x-2">
-                        <FileText className="w-5 h-5" />
-                        <span>Document Management</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {documents.map((doc) => (
-                          <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg">
-                            <div className="flex items-center space-x-4">
-                              <FileText className="w-8 h-8 text-gray-400" />
-                              <div>
-                                <h4 className="font-medium text-gray-900">{doc.name}</h4>
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getDocStatusColor(doc.status)}`}>
-                                  {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
-                                </span>
-                                {doc.uploaded_at && (
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    Uploaded: {new Date(doc.uploaded_at).toLocaleDateString()}
-                                  </p>
-                                )}
-                              </div>
+                  {/* Tabs for different sections */}
+                  <Tabs value={activeTab} onValueChange={setActiveTab}>
+                    <TabsList className="grid w-full grid-cols-4">
+                      <TabsTrigger value="overview">Overview</TabsTrigger>
+                      <TabsTrigger value="owner">Owner Info</TabsTrigger>
+                      <TabsTrigger value="team">Team</TabsTrigger>
+                      <TabsTrigger value="documents">Documents</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="overview" className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Business Information</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          {isLoadingDetails ? (
+                            <div className="text-center py-4">
+                              <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-custom-dark-maroon" />
+                              <p>Loading details...</p>
                             </div>
-                            <div className="flex items-center space-x-2">
-                              {doc.status === 'pending' ? (
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleDocumentUpload(doc.id, doc.name)}
-                                  disabled={uploadingDoc === doc.id}
-                                  className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
-                                >
-                                  <Upload className="w-4 h-4 mr-2" />
-                                  {uploadingDoc === doc.id ? 'Uploading...' : 'Upload'}
-                                </Button>
-                              ) : (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    toast({
-                                      title: "Document Ready",
-                                      description: `${doc.name} is available for client download.`,
-                                    });
-                                  }}
-                                >
-                                  <Download className="w-4 h-4 mr-2" />
-                                  Ready
-                                </Button>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <Label className="text-sm font-medium text-gray-500">Business Name</Label>
+                                <p className="text-gray-900">{selectedProfile.business_name}</p>
+                              </div>
+                              <div>
+                                <Label className="text-sm font-medium text-gray-500">Business Type</Label>
+                                <p className="text-gray-900">{formatBusinessType(selectedProfile.business_type)}</p>
+                              </div>
+                              <div>
+                                <Label className="text-sm font-medium text-gray-500">Email</Label>
+                                <p className="text-gray-900">{selectedProfile.email}</p>
+                              </div>
+                              <div>
+                                <Label className="text-sm font-medium text-gray-500">Phone</Label>
+                                <p className="text-gray-900">{selectedProfile.phone}</p>
+                              </div>
+                              <div className="md:col-span-2">
+                                <Label className="text-sm font-medium text-gray-500">Address</Label>
+                                <p className="text-gray-900">
+                                  {selectedProfile.address_line1}
+                                  {selectedProfile.address_line2 && <>, {selectedProfile.address_line2}</>}
+                                  <br />
+                                  {selectedProfile.city}, {selectedProfile.state} {selectedProfile.zip_code}
+                                </p>
+                              </div>
+                              {selectedProfile.tax_id && (
+                                <div>
+                                  <Label className="text-sm font-medium text-gray-500">Tax ID</Label>
+                                  <p className="text-gray-900">{selectedProfile.tax_id}</p>
+                                </div>
+                              )}
+                              {selectedProfile.description && (
+                                <div className="md:col-span-2">
+                                  <Label className="text-sm font-medium text-gray-500">Description</Label>
+                                  <p className="text-gray-900">{selectedProfile.description}</p>
+                                </div>
                               )}
                             </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="owner" className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Owner Information</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          {isLoadingDetails ? (
+                            <div className="text-center py-4">
+                              <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-custom-dark-maroon" />
+                              <p>Loading owner details...</p>
+                            </div>
+                          ) : selectedUserProfile ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <Label className="text-sm font-medium text-gray-500">Full Name</Label>
+                                <p className="text-gray-900">{selectedUserProfile.full_name}</p>
+                              </div>
+                              <div>
+                                <Label className="text-sm font-medium text-gray-500">Email</Label>
+                                <p className="text-gray-900">{selectedUserProfile.email}</p>
+                              </div>
+                              <div>
+                                <Label className="text-sm font-medium text-gray-500">Phone</Label>
+                                <p className="text-gray-900">{selectedUserProfile.phone || 'Not provided'}</p>
+                              </div>
+                              <div>
+                                <Label className="text-sm font-medium text-gray-500">Role</Label>
+                                <p className="text-gray-900">{selectedUserProfile.role}</p>
+                              </div>
+                              <div>
+                                <Label className="text-sm font-medium text-gray-500">Account Created</Label>
+                                <p className="text-gray-900">{new Date(selectedUserProfile.created_at).toLocaleDateString()}</p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center py-8 text-gray-500">
+                              <User className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                              <p>No owner profile information available</p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="team" className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Team Members ({teamMembers.length})</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          {isLoadingDetails ? (
+                            <div className="text-center py-4">
+                              <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-custom-dark-maroon" />
+                              <p>Loading team members...</p>
+                            </div>
+                          ) : teamMembers.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">
+                              <User className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                              <p>No team members added</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-4">
+                              {teamMembers.map((member) => (
+                                <div key={member.id} className="p-4 border rounded-lg">
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <h4 className="font-medium text-gray-900">{member.name}</h4>
+                                      <p className="text-sm text-gray-600">{member.role}</p>
+                                      {member.email && (
+                                        <p className="text-sm text-gray-500">{member.email}</p>
+                                      )}
+                                      {member.phone && (
+                                        <p className="text-sm text-gray-500">{member.phone}</p>
+                                      )}
+                                    </div>
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                      member.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                    }`}>
+                                      {member.status}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="documents" className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center space-x-2">
+                            <FileText className="w-5 h-5" />
+                            <span>Document Management</span>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            {documents.map((doc) => (
+                              <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg">
+                                <div className="flex items-center space-x-4">
+                                  <FileText className="w-8 h-8 text-gray-400" />
+                                  <div>
+                                    <h4 className="font-medium text-gray-900">{doc.name}</h4>
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getDocStatusColor(doc.status)}`}>
+                                      {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
+                                    </span>
+                                    {doc.uploaded_at && (
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        Uploaded: {new Date(doc.uploaded_at).toLocaleDateString()}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  {doc.status === 'pending' ? (
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleDocumentUpload(doc.id, doc.name)}
+                                      disabled={uploadingDoc === doc.id}
+                                      className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
+                                    >
+                                      <Upload className="w-4 h-4 mr-2" />
+                                      {uploadingDoc === doc.id ? 'Uploading...' : 'Upload'}
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        toast({
+                                          title: "Document Ready",
+                                          description: `${doc.name} is available for client download.`,
+                                        });
+                                      }}
+                                    >
+                                      <Download className="w-4 h-4 mr-2" />
+                                      Ready
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                      
-                      <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                        <h4 className="font-medium text-blue-900 mb-2">Document Status Guide</h4>
-                        <ul className="text-sm text-blue-800 space-y-1">
-                          <li><strong>Pending:</strong> Document needs to be prepared and uploaded</li>
-                          <li><strong>Ready:</strong> Document is uploaded and available for client download</li>
-                          <li><strong>Completed:</strong> Client has downloaded the document</li>
-                        </ul>
-                      </div>
-                    </CardContent>
-                  </Card>
+                          
+                          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                            <h4 className="font-medium text-blue-900 mb-2">Document Status Guide</h4>
+                            <ul className="text-sm text-blue-800 space-y-1">
+                              <li><strong>Pending:</strong> Document needs to be prepared and uploaded</li>
+                              <li><strong>Ready:</strong> Document is uploaded and available for client download</li>
+                              <li><strong>Completed:</strong> Client has downloaded the document</li>
+                            </ul>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+                  </Tabs>
                 </div>
               ) : (
                 <Card>
                   <CardContent className="flex items-center justify-center h-64">
                     <div className="text-center">
                       <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">Select a Business</h3>
-                      <p className="text-gray-600">Choose a business from the list to view details and manage documents.</p>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Select an Application</h3>
+                      <p className="text-gray-600">Choose a business application from the list to view details and manage documents.</p>
                     </div>
                   </CardContent>
                 </Card>
