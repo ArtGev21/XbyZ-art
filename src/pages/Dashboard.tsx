@@ -218,7 +218,7 @@ export const Dashboard = () => {
       // Check if profile exists using limit(1) to avoid PGRST116 error
       const { data: profiles, error } = await supabase
         .from('user_profiles')
-        .select('*')
+        .select('id,full_name,email,phone,role,profile_picture_url,created_at,updated_at')
         .eq('id', user.id)
         .limit(1);
 
@@ -240,7 +240,7 @@ export const Dashboard = () => {
         const { data: createdProfile, error: createError } = await supabase
           .from('user_profiles')
           .insert([newProfile])
-          .select()
+          .select('id,full_name,email,phone,role,profile_picture_url,created_at,updated_at')
           .single();
 
         if (createError) throw createError;
@@ -267,7 +267,7 @@ export const Dashboard = () => {
     try {
       const { data: profiles, error } = await supabase
         .from('business_profiles')
-        .select('*')
+        .select('id,user_id,business_name,business_type,address_line1,address_line2,city,state,zip_code,phone,email,tax_id,description,status,created_at,updated_at')
         .eq('user_id', user.id)
         .limit(1);
 
@@ -294,7 +294,7 @@ export const Dashboard = () => {
     try {
       const { data, error } = await supabase
         .from('team_members')
-        .select('*')
+        .select('id,user_id,name,role,email,phone,status,created_at,updated_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -409,7 +409,7 @@ export const Dashboard = () => {
       const { data, error } = await supabase
         .from('team_members')
         .insert([newMember])
-        .select()
+        .select('id,user_id,name,role,email,phone,status,created_at,updated_at')
         .single();
 
       if (error) throw error;

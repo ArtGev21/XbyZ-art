@@ -184,7 +184,7 @@ export const PricingPackages = ({ isOpen, onClose }: PricingPackagesProps) => {
       const { data: businessProfile, error: profileError } = await supabase
         .from('business_profiles')
         .insert([businessProfileData])
-        .select()
+        .select('id,user_id,business_name,business_type,address_line1,address_line2,city,state,zip_code,phone,email,tax_id,description,status,created_at,updated_at')
         .single();
 
       if (profileError) {

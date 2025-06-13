@@ -160,7 +160,7 @@ export const AdminDashboard = () => {
       // First, get all business profiles
       const { data: businessProfiles, error: businessError } = await supabase
         .from('business_profiles')
-        .select('*')
+        .select('id,user_id,business_name,business_type,address_line1,address_line2,city,state,zip_code,phone,email,tax_id,description,status,created_at,updated_at')
         .order('created_at', { ascending: false });
 
       if (businessError) throw businessError;
@@ -181,7 +181,7 @@ export const AdminDashboard = () => {
       // Fetch user profiles for these user IDs
       const { data: userProfiles, error: userError } = await supabase
         .from('user_profiles')
-        .select('*')
+        .select('id,full_name,email,phone,role,created_at')
         .in('id', userIds);
 
       if (userError) console.error('Error loading user profiles:', userError);
@@ -189,7 +189,7 @@ export const AdminDashboard = () => {
       // Fetch team members for these user IDs
       const { data: teamMembers, error: teamError } = await supabase
         .from('team_members')
-        .select('*')
+        .select('id,user_id,name,role,email,phone,status,created_at')
         .in('user_id', userIds);
 
       if (teamError) console.error('Error loading team members:', teamError);
