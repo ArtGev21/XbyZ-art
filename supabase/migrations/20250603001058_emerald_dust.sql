@@ -202,10 +202,10 @@ CREATE TRIGGER update_orders_updated_at
 
 -- Insert sample packages
 INSERT INTO packages (name, business_type, price, features, processing_time) VALUES
-('Basic LLC', 'llc', 299, '["State Filing", "Operating Agreement", "Tax ID", "Compliance Calendar"]'::jsonb, '5-7 business days'),
-('Premium LLC', 'llc', 599, '["State Filing", "Operating Agreement", "Tax ID", "Compliance Calendar", "Registered Agent Service", "Banking Resolution"]'::jsonb, '3-5 business days'),
-('Basic Corporation', 'corporation', 399, '["State Filing", "Bylaws", "Tax ID", "Compliance Calendar"]'::jsonb, '5-7 business days'),
-('Premium Corporation', 'corporation', 799, '["State Filing", "Bylaws", "Tax ID", "Compliance Calendar", "Registered Agent Service", "Banking Resolution", "Stock Certificates"]'::jsonb, '3-5 business days'),
-('Basic Partnership', 'partnership', 249, '["State Filing", "Partnership Agreement", "Tax ID"]'::jsonb, '5-7 business days'),
-('Premium Partnership', 'partnership', 499, '["State Filing", "Partnership Agreement", "Tax ID", "Registered Agent Service", "Banking Resolution"]'::jsonb, '3-5 business days'),
-('Sole Proprietorship', 'sole_proprietorship', 149, '["DBA Filing", "Tax ID", "Business License Research"]'::jsonb, '3-5 business days');
+('Standard LLC', 'LLC', 299, '["State Filing", "Operating Agreement", "Tax ID", "Compliance Calendar"]'::jsonb, '5-7 business days'),
+('Express LLC', 'LLC', 599, '["State Filing", "Operating Agreement", "Tax ID", "Compliance Calendar", "Registered Agent Service", "Banking Resolution"]'::jsonb, '3-5 business days'),
+('Standard Corporation', 'Corporation', 399, '["State Filing", "Bylaws", "Tax ID", "Compliance Calendar"]'::jsonb, '5-7 business days'),
+('Express Corporation', 'Corporation', 499, '["State Filing", "Bylaws", "Tax ID", "Compliance Calendar", "Registered Agent Service", "Banking Resolution", "Stock Certificates"]'::jsonb, '3-5 business days'),
+('Standard Partnership', 'Partnership', 249, '["State Filing", "Partnership Agreement", "Tax ID"]'::jsonb, '5-7 business days'),
+('Express Partnership', 'Partnership', 499, '["State Filing", "Partnership Agreement", "Tax ID", "Registered Agent Service", "Banking Resolution"]'::jsonb, '3-5 business days'),
+('Sole Proprietorship', 'Sole_Proprietorship', 149, '["DBA Filing", "Tax ID", "Business License Research"]'::jsonb, '3-5 business days');

@@ -5,10 +5,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { BusinessFormationForm } from "@/components/BusinessFormationForm";
 import { AuthModal } from "@/components/AuthModal";
 import { PricingPackages } from "@/components/PricingPackages";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 export const Header = () => {
-  const { isAuthenticated, logout, loading } = useAuth();
+  const { isAuthenticated, logout, loading, isAdmin } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -16,6 +16,7 @@ export const Header = () => {
   const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [hasSubmittedInfo, setHasSubmittedInfo] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     // Check if user has submitted information
@@ -25,7 +26,10 @@ export const Header = () => {
 
   const handleGetStarted = () => {
     if (isAuthenticated) {
-      if (hasSubmittedInfo) {
+      // Check if user is admin and redirect accordingly
+      if (isAdmin) {
+        navigate('/admin');
+      } else if (hasSubmittedInfo) {
         navigate('/dashboard');
       } else {
         setIsFormOpen(true);
@@ -41,11 +45,30 @@ export const Header = () => {
   };
 
   const handleNavClick = (sectionId: string) => {
-    const section = document.getElementById(sectionId);
-    if (section) {
-      section.scrollIntoView({ behavior: 'smooth' });
-    }
+    // Close mobile menu
     setIsMenuOpen(false);
+    
+    // If we're not on the home page, navigate to home first
+    if (location.pathname !== '/') {
+      navigate('/');
+      // Wait for navigation to complete, then scroll to section
+      setTimeout(() => {
+        const section = document.getElementById(sectionId);
+        if (section) {
+          section.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    } else {
+      // We're already on home page, just scroll to section
+      const section = document.getElementById(sectionId);
+      if (section) {
+        section.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  };
+
+  const handleLogoClick = () => {
+    navigate('/');
   };
 
   useEffect(() => {
@@ -65,6 +88,14 @@ export const Header = () => {
     );
   }
 
+  // Determine button text based on user type and status
+  const getButtonText = () => {
+    if (!isAuthenticated) return 'Get Started';
+    if (isAdmin) return 'Admin Dashboard';
+    if (hasSubmittedInfo) return 'Dashboard';
+    return 'Get Started';
+  };
+
   return (
     <header 
       className={`fixed w-full z-50 transition-colors duration-300 ${
@@ -78,7 +109,7 @@ export const Header = () => {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
             <button 
-              onClick={() => handleNavClick('/')}  
+              onClick={handleLogoClick}  
               className="flex items-center focus:outline-2 focus:outline-offset-2 focus:outline-custom-dark-maroon" 
               aria-label="Home"
             >
@@ -92,7 +123,7 @@ export const Header = () => {
           
           <nav className="hidden md:flex items-center space-x-8" role="navigation" aria-label="Main navigation">
             <button 
-              onClick={() => handleNavClick('/about')} 
+              onClick={() => handleNavClick('about')} 
               className="hover:text-custom-medium-gray transition-colors duration-300 focus:outline-2 focus:outline-offset-2 focus:outline-custom-dark-maroon"
             >
               About
@@ -121,7 +152,7 @@ export const Header = () => {
               size="lg" 
               className="text-custom-medium-gray font-light bg-custom-dark-maroon hover:bg-custom-deep-maroon text-white px-4 py-2 text-sm rounded-full hover:scale-105 transition-transform duration-300"
             >
-              {isAuthenticated && hasSubmittedInfo ? 'Dashboard' : 'Get Started'}
+              {getButtonText()}
             </Button>
             
             {isAuthenticated && (
@@ -129,7 +160,7 @@ export const Header = () => {
                 onClick={logout}
                 variant="outline"
                 size="lg" 
-                className="px-4 py-2 text-sm rounded-full hover:scale-105 transition-transform duration-300"
+                className="px-4 py-2 text-sm rounded-full hover:scale-105 hover:bg-white/60 hover:text-custom-dark-maroon transition-transform duration-300"
               >
                 Logout
               </Button>
@@ -142,14 +173,14 @@ export const Header = () => {
               size="sm"
               className="text-custom-medium-gray font-light bg-custom-dark-maroon hover:bg-custom-deep-maroon text-white px-3 py-1 text-xs rounded-full hover:scale-105 transition-transform duration-300"
             >
-              {isAuthenticated && hasSubmittedInfo ? 'Dashboard' : 'Get Started'}
+              {getButtonText()}
             </Button>
             {isAuthenticated && (
               <Button 
                 onClick={logout}
                 variant="outline"
                 size="sm"
-                className="px-3 py-1 text-xs rounded-full hover:scale-105 transition-transform duration-300"
+                className="px-3 py-1 text-xs rounded-full hover:scale-105 hover:bg-white/60 hover:text-custom-dark-maroon transition-transform duration-300"
               >
                 Logout
               </Button>

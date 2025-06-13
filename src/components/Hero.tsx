@@ -11,7 +11,7 @@ export const Hero = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [hasSubmittedInfo, setHasSubmittedInfo] = useState(false);
-  const { isAuthenticated, logout, loading } = useAuth();
+  const { isAuthenticated, logout, loading, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -22,14 +22,23 @@ export const Hero = () => {
 
   const handleGetStarted = () => {
     if (isAuthenticated) {
-      setIsFormOpen(true);
+      // Check if user is admin and redirect accordingly
+      if (isAdmin) {
+        navigate('/admin');
+      } else {
+        setIsFormOpen(true);
+      }
     } else {
       setIsAuthModalOpen(true);
     }
   };
 
   const handleDashboard = () => {
-    navigate('/dashboard');
+    if (isAdmin) {
+      navigate('/admin');
+    } else {
+      navigate('/dashboard');
+    }
   };
 
   const handleFormSubmitted = () => {
@@ -75,13 +84,13 @@ export const Hero = () => {
                   Must have solutions for your business...
                 </p>
                 <div className="flex justify-center gap-4">
-                  {isAuthenticated && hasSubmittedInfo ? (
+                  {isAuthenticated && (hasSubmittedInfo || isAdmin) ? (
                     <Button 
                       onClick={handleDashboard}
                       size="lg" 
                       className="text-custom-medium-gray font-light bg-custom-dark-maroon hover:bg-custom-deep-maroon text-white px-8 py-3 text-lg rounded-full hover:scale-105 transition-transform duration-300"
                     >
-                      Dashboard
+                      {isAdmin ? 'Admin Dashboard' : 'Dashboard'}
                     </Button>
                   ) : (
                     <Button 
@@ -97,7 +106,7 @@ export const Hero = () => {
                       onClick={logout}
                       variant="outline"
                       size="lg" 
-                      className="px-8 py-3 text-lg rounded-full hover:scale-105 transition-transform duration-300"
+                      className="px-8 py-3 text-lg rounded-full hover:scale-105 hover:bg-white/60 hover:text-custom-dark-maroon transition-transform duration-300"
                     >
                       Logout
                     </Button>

@@ -200,6 +200,91 @@ export type Database = {
           }
         ]
       }
+      user_profiles: {
+        Row: {
+          id: string
+          full_name: string
+          email: string
+          phone: string
+          role: string
+          profile_picture_url: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          full_name: string
+          email: string
+          phone?: string
+          role?: string
+          profile_picture_url?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          full_name?: string
+          email?: string
+          phone?: string
+          role?: string
+          profile_picture_url?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      team_members: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          role: string
+          email: string
+          phone: string
+          status: 'active' | 'inactive'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          role?: string
+          email?: string
+          phone?: string
+          status?: 'active' | 'inactive'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          role?: string
+          email?: string
+          phone?: string
+          status?: 'active' | 'inactive'
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -211,6 +296,7 @@ export type Database = {
       business_type: 'llc' | 'corporation' | 'partnership' | 'sole_proprietorship'
       application_status: 'draft' | 'submitted' | 'in_review' | 'approved' | 'rejected'
       payment_status: 'pending' | 'paid' | 'failed' | 'refunded'
+      team_member_status: 'active' | 'inactive'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -278,7 +364,7 @@ export type TablesUpdate<
     ? U
     : never
   : PublicTableNameOrOptions extends keyof Database["public"]["Tables"]
-  ? Database["public"]["Tables"][PublicTableNameOrOptions] extends {
+  ? Database["public"]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U

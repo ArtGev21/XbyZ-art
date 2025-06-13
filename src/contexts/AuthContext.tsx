@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
 
 interface AuthContextType {
   user: User | null;
@@ -11,6 +10,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   loading: boolean;
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,6 +32,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const isAdmin = user?.email === 'info@xbyzeth.com';
+
   useEffect(() => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -41,12 +43,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setUser(session?.user ?? null);
         setLoading(false);
 
-        // Handle admin redirect
+        // Handle admin redirect after successful login
         if (session?.user?.email === 'info@xbyzeth.com' && event === 'SIGNED_IN') {
-          // Check if we're not already on admin page to avoid infinite redirects
-          if (!window.location.pathname.includes('/admin')) {
-            window.location.href = '/admin';
-          }
+          // Use a small delay to ensure the auth state is fully updated
+          setTimeout(() => {
+            if (!window.location.pathname.includes('/admin')) {
+              window.location.replace('/admin');
+            }
+          }, 100);
         }
       }
     );
@@ -60,7 +64,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // Handle admin redirect on initial load
       if (session?.user?.email === 'info@xbyzeth.com') {
         if (!window.location.pathname.includes('/admin')) {
-          window.location.href = '/admin';
+          window.location.replace('/admin');
         }
       }
     });
@@ -130,7 +134,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       signup, 
       logout, 
       isAuthenticated, 
-      loading 
+      loading,
+      isAdmin
     }}>
       {children}
     </AuthContext.Provider>
