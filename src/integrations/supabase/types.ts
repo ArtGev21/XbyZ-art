@@ -74,51 +74,6 @@ export type Database = {
           }
         ]
       }
-      business_members: {
-        Row: {
-          id: string
-          full_name: string
-          position_title: string
-          department: 'Executive' | 'Management' | 'Operations' | 'Finance' | 'HR' | 'Sales/Marketing' | 'IT/Technical' | 'Other'
-          employment_status: 'Full-time' | 'Part-time' | 'Contractor' | 'Consultant'
-          start_date: string
-          email: string
-          phone: string
-          reporting_manager: string
-          access_level: 'Admin' | 'Manager' | 'Standard' | 'Limited'
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          full_name: string
-          position_title: string
-          department: 'Executive' | 'Management' | 'Operations' | 'Finance' | 'HR' | 'Sales/Marketing' | 'IT/Technical' | 'Other'
-          employment_status: 'Full-time' | 'Part-time' | 'Contractor' | 'Consultant'
-          start_date: string
-          email: string
-          phone: string
-          reporting_manager: string
-          access_level: 'Admin' | 'Manager' | 'Standard' | 'Limited'
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          full_name?: string
-          position_title?: string
-          department?: 'Executive' | 'Management' | 'Operations' | 'Finance' | 'HR' | 'Sales/Marketing' | 'IT/Technical' | 'Other'
-          employment_status?: 'Full-time' | 'Part-time' | 'Contractor' | 'Consultant'
-          start_date?: string
-          email?: string
-          phone?: string
-          reporting_manager?: string
-          access_level?: 'Admin' | 'Manager' | 'Standard' | 'Limited'
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       packages: {
         Row: {
           id: string
@@ -335,70 +290,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      insert_business_member: {
-        Args: {
-          p_full_name: string
-          p_position_title: string
-          p_department: string
-          p_employment_status: string
-          p_start_date: string
-          p_email: string
-          p_phone: string
-          p_reporting_manager: string
-          p_access_level: string
-        }
-        Returns: {
-          id: string
-          full_name: string
-          position_title: string
-          department: string
-          employment_status: string
-          start_date: string
-          email: string
-          phone: string
-          reporting_manager: string
-          access_level: string
-          created_at: string
-          updated_at: string
-        }
-      }
-      update_business_member: {
-        Args: {
-          p_id: string
-          p_full_name?: string
-          p_position_title?: string
-          p_department?: string
-          p_employment_status?: string
-          p_start_date?: string
-          p_email?: string
-          p_phone?: string
-          p_reporting_manager?: string
-          p_access_level?: string
-        }
-        Returns: {
-          id: string
-          full_name: string
-          position_title: string
-          department: string
-          employment_status: string
-          start_date: string
-          email: string
-          phone: string
-          reporting_manager: string
-          access_level: string
-          created_at: string
-          updated_at: string
-        }
-      }
+      [_ in never]: never
     }
     Enums: {
       business_type: 'llc' | 'corporation' | 'partnership' | 'sole_proprietorship'
       application_status: 'draft' | 'submitted' | 'in_review' | 'approved' | 'rejected'
       payment_status: 'pending' | 'paid' | 'failed' | 'refunded'
       team_member_status: 'active' | 'inactive'
-      department_type: 'Executive' | 'Management' | 'Operations' | 'Finance' | 'HR' | 'Sales/Marketing' | 'IT/Technical' | 'Other'
-      employment_status_type: 'Full-time' | 'Part-time' | 'Contractor' | 'Consultant'
-      access_level_type: 'Admin' | 'Manager' | 'Standard' | 'Limited'
     }
     CompositeTypes: {
       [_ in never]: never
