@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,12 +21,12 @@ import {
   X,
   Users,
   Trash2,
-  Camera,
   Phone,
   Mail,
   Briefcase,
   Check,
-  Loader2
+  Loader2,
+  MapPin
 } from 'lucide-react';
 
 interface UserProfile {
@@ -87,6 +86,7 @@ export const Dashboard = () => {
   // Profile state
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [activeSection, setActiveSection] = useState('business');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [profileForm, setProfileForm] = useState<Partial<UserProfile>>({});
@@ -483,12 +483,6 @@ export const Dashboard = () => {
     });
   };
 
-  const handleLogout = async () => {
-    await logout();
-    localStorage.removeItem('dashboardData');
-    navigate('/');
-  };
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'text-yellow-600 bg-yellow-100';
@@ -529,11 +523,12 @@ export const Dashboard = () => {
     <div className="min-h-screen bg-white">
       <Header />
       
-      <div className="pt-20 min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Personalized Welcome Header */}
-          <div className="mb-8">
-            <div className="flex items-center space-x-4 mb-6">
+      <div className="pt-20 min-h-screen bg-gray-50 flex">
+        {/* Left Sidebar */}
+        <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col">
+          {/* User Profile Section */}
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center space-x-4 mb-4">
               <Avatar className="w-16 h-16">
                 <AvatarImage src={userProfile.profile_picture_url} alt={userProfile.full_name} />
                 <AvatarFallback className="bg-custom-dark-maroon text-white text-lg">
@@ -541,394 +536,67 @@ export const Dashboard = () => {
                 </AvatarFallback>
               </Avatar>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">
-                  Welcome to your dashboard, {userProfile.full_name}!
-                </h1>
-                <p className="text-gray-600 mt-1">
-                  {userProfile.role} • {dashboardData.selectedPackage}
-                </p>
+                <h2 className="text-xl font-bold text-gray-900">{userProfile.full_name}</h2>
+                <p className="text-sm text-gray-500">{userProfile.email}</p>
               </div>
             </div>
-
-            {/* Profile Information Card */}
-            <Card className="mb-6">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center space-x-2">
-                  <User className="w-5 h-5" />
-                  <span>Profile Information</span>
-                </CardTitle>
-                <div className="flex items-center space-x-2">
-                  {hasChanges && (
-                    <span className="text-sm text-amber-600 flex items-center">
-                      <Edit className="w-4 h-4 mr-1" />
-                      Unsaved changes
-                    </span>
-                  )}
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      if (isEditingProfile) {
-                        setProfileForm(userProfile);
-                        setHasChanges(false);
-                      }
-                      setIsEditingProfile(!isEditingProfile);
-                    }}
-                    disabled={isSaving}
-                  >
-                    {isEditingProfile ? <X className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
-                    {isEditingProfile ? 'Cancel' : 'Edit'}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {isEditingProfile ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="full_name">Full Name *</Label>
-                        <Input
-                          id="full_name"
-                          value={profileForm.full_name || ''}
-                          onChange={(e) => {
-                            setProfileForm(prev => ({ ...prev, full_name: e.target.value }));
-                            setHasChanges(true);
-                          }}
-                          placeholder="Enter your full name"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="email">Email Address *</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          value={profileForm.email || ''}
-                          onChange={(e) => {
-                            setProfileForm(prev => ({ ...prev, email: e.target.value }));
-                            setHasChanges(true);
-                          }}
-                          placeholder="Enter your email"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="phone">Phone Number</Label>
-                        <Input
-                          id="phone"
-                          type="tel"
-                          value={profileForm.phone || ''}
-                          onChange={(e) => {
-                            setProfileForm(prev => ({ ...prev, phone: e.target.value }));
-                            setHasChanges(true);
-                          }}
-                          placeholder="Enter your phone number"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="role">Role/Position</Label>
-                        <Input
-                          id="role"
-                          value={profileForm.role || ''}
-                          onChange={(e) => {
-                            setProfileForm(prev => ({ ...prev, role: e.target.value }));
-                            setHasChanges(true);
-                          }}
-                          placeholder="Enter your role"
-                        />
-                      </div>
-                    </div>
-                    <div className="md:col-span-2 flex justify-end space-x-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setProfileForm(userProfile);
-                          setIsEditingProfile(false);
-                          setHasChanges(false);
-                        }}
-                        disabled={isSaving}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleProfileSave}
-                        disabled={isSaving || !hasChanges}
-                        className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
-                      >
-                        {isSaving ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <Save className="w-4 h-4 mr-2" />
-                            Save Changes
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div className="flex items-center space-x-3">
-                        <User className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <Label className="text-sm font-medium text-gray-500">Full Name</Label>
-                          <p className="text-gray-900">{userProfile.full_name}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <Mail className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <Label className="text-sm font-medium text-gray-500">Email Address</Label>
-                          <p className="text-gray-900">{userProfile.email}</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <div className="flex items-center space-x-3">
-                        <Phone className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <Label className="text-sm font-medium text-gray-500">Phone Number</Label>
-                          <p className="text-gray-900">{userProfile.phone || 'Not provided'}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <Briefcase className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <Label className="text-sm font-medium text-gray-500">Role/Position</Label>
-                          <p className="text-gray-900">{userProfile.role}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Team Members Section */}
-            <Card className="mb-6">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center space-x-2">
-                  <Users className="w-5 h-5" />
-                  <span>Team Members</span>
-                </CardTitle>
-                <Button
-                  onClick={handleAddTeamMember}
-                  className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
-                >
-                  <Users className="w-4 h-4 mr-2" />
-                  Add Member
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {teamMembers.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No team members yet</h3>
-                    <p className="text-gray-600 mb-4">Add team members to collaborate on your business.</p>
-                    <Button
-                      onClick={handleAddTeamMember}
-                      className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
-                    >
-                      Add Your First Team Member
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {teamMembers.map((member) => (
-                      <div key={member.id} className="border rounded-lg p-4">
-                        {editingMemberId === member.id ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <div>
-                              <Label htmlFor={`name-${member.id}`}>Name *</Label>
-                              <Input
-                                id={`name-${member.id}`}
-                                value={memberForms[member.id]?.name || ''}
-                                onChange={(e) => {
-                                  setMemberForms(prev => ({
-                                    ...prev,
-                                    [member.id]: { ...prev[member.id], name: e.target.value }
-                                  }));
-                                  setHasChanges(true);
-                                }}
-                                placeholder="Enter name"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor={`role-${member.id}`}>Role</Label>
-                              <Input
-                                id={`role-${member.id}`}
-                                value={memberForms[member.id]?.role || ''}
-                                onChange={(e) => {
-                                  setMemberForms(prev => ({
-                                    ...prev,
-                                    [member.id]: { ...prev[member.id], role: e.target.value }
-                                  }));
-                                  setHasChanges(true);
-                                }}
-                                placeholder="Enter role"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor={`email-${member.id}`}>Email</Label>
-                              <Input
-                                id={`email-${member.id}`}
-                                type="email"
-                                value={memberForms[member.id]?.email || ''}
-                                onChange={(e) => {
-                                  setMemberForms(prev => ({
-                                    ...prev,
-                                    [member.id]: { ...prev[member.id], email: e.target.value }
-                                  }));
-                                  setHasChanges(true);
-                                }}
-                                placeholder="Enter email"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor={`phone-${member.id}`}>Phone</Label>
-                              <Input
-                                id={`phone-${member.id}`}
-                                type="tel"
-                                value={memberForms[member.id]?.phone || ''}
-                                onChange={(e) => {
-                                  setMemberForms(prev => ({
-                                    ...prev,
-                                    [member.id]: { ...prev[member.id], phone: e.target.value }
-                                  }));
-                                  setHasChanges(true);
-                                }}
-                                placeholder="Enter phone"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor={`status-${member.id}`}>Status</Label>
-                              <select
-                                id={`status-${member.id}`}
-                                value={memberForms[member.id]?.status || 'active'}
-                                onChange={(e) => {
-                                  setMemberForms(prev => ({
-                                    ...prev,
-                                    [member.id]: { ...prev[member.id], status: e.target.value as 'active' | 'inactive' }
-                                  }));
-                                  setHasChanges(true);
-                                }}
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                              >
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                              </select>
-                            </div>
-                            <div className="flex items-end space-x-2">
-                              <Button
-                                variant="outline"
-                                onClick={() => {
-                                  setMemberForms(prev => ({
-                                    ...prev,
-                                    [member.id]: { ...member }
-                                  }));
-                                  setEditingMemberId(null);
-                                  setHasChanges(false);
-                                }}
-                                disabled={isSaving}
-                              >
-                                Cancel
-                              </Button>
-                              <Button
-                                onClick={() => handleMemberSave(member.id)}
-                                disabled={isSaving}
-                                className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
-                              >
-                                {isSaving ? (
-                                  <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Saving...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Check className="w-4 h-4 mr-2" />
-                                    Save
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-4">
-                              <Avatar className="w-10 h-10">
-                                <AvatarFallback className="bg-gray-200 text-gray-600">
-                                  {getInitials(member.name)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <h4 className="font-medium text-gray-900">{member.name}</h4>
-                                <p className="text-sm text-gray-600">{member.role}</p>
-                                <div className="flex items-center space-x-4 mt-1">
-                                  {member.email && (
-                                    <span className="text-xs text-gray-500">{member.email}</span>
-                                  )}
-                                  {member.phone && (
-                                    <span className="text-xs text-gray-500">{member.phone}</span>
-                                  )}
-                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(member.status)}`}>
-                                    {member.status}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setEditingMemberId(member.id)}
-                              >
-                                <Edit className="w-4 h-4" />
-                                Edit
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleRemoveTeamMember(member.id)}
-                                className="text-red-600 hover:text-red-800"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </div>
 
-          {/* Main Content Tabs */}
-          <Tabs defaultValue="business" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="business" className="flex items-center space-x-2">
-                <Building2 className="w-4 h-4" />
-                <span>Business Information</span>
-              </TabsTrigger>
-              <TabsTrigger value="personal" className="flex items-center space-x-2">
-                <User className="w-4 h-4" />
-                <span>Personal Information</span>
-              </TabsTrigger>
-              <TabsTrigger value="documents" className="flex items-center space-x-2">
-                <FileText className="w-4 h-4" />
-                <span>Document Portal</span>
-              </TabsTrigger>
-            </TabsList>
+          {/* Navigation Menu */}
+          <nav className="flex-1 p-4">
+            <div className="space-y-2">
+              <button
+                onClick={() => setActiveSection('business')}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                  activeSection === 'business' 
+                    ? 'bg-custom-dark-maroon text-white' 
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <Building2 className="w-5 h-5" />
+                <span className="font-medium">Business Information</span>
+              </button>
+              
+              <button
+                onClick={() => setActiveSection('personal')}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                  activeSection === 'personal' 
+                    ? 'bg-custom-dark-maroon text-white' 
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <User className="w-5 h-5" />
+                <span className="font-medium">Personal Information</span>
+              </button>
+              
+              <button
+                onClick={() => setActiveSection('documents')}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                  activeSection === 'documents' 
+                    ? 'bg-custom-dark-maroon text-white' 
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <FileText className="w-5 h-5" />
+                <span className="font-medium">Document Portal</span>
+              </button>
+            </div>
+          </nav>
+        </div>
 
-            {/* Business Information Tab */}
-            <TabsContent value="business">
+        {/* Main Content Area */}
+        <div className="flex-1 p-8 overflow-y-auto">
+          {/* Business Information Section */}
+          {activeSection === 'business' && (
+            <div className="max-w-4xl">
+              <div className="mb-6">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Business Information</h1>
+                <p className="text-gray-600">Manage your business details and settings</p>
+              </div>
+
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>Business Information</CardTitle>
+                  <CardTitle>Business Details</CardTitle>
                   <Button
                     variant="outline"
                     onClick={() => {
@@ -942,9 +610,9 @@ export const Dashboard = () => {
                     {isEditingBusiness ? 'Cancel' : 'Edit'}
                   </Button>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-6">
                   {isEditingBusiness ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <Label htmlFor="business_name">Business Name</Label>
                         <Input
@@ -1032,163 +700,395 @@ export const Dashboard = () => {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-sm font-medium text-gray-500">Business Name</Label>
-                        <p className="text-gray-900">{dashboardData.businessProfile.business_name}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="flex items-center space-x-3">
+                        <Building2 className="w-5 h-5 text-gray-400" />
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Business Name</Label>
+                          <p className="text-gray-900">{dashboardData.businessProfile.business_name}</p>
+                        </div>
                       </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-500">Business Type</Label>
-                        <p className="text-gray-900 capitalize">{dashboardData.businessProfile.business_type?.replace('_', ' ')}</p>
+                      <div className="flex items-center space-x-3">
+                        <Briefcase className="w-5 h-5 text-gray-400" />
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Business Type</Label>
+                          <p className="text-gray-900 capitalize">{dashboardData.businessProfile.business_type?.replace('_', ' ')}</p>
+                        </div>
                       </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-500">Address</Label>
-                        <p className="text-gray-900">
-                          {dashboardData.businessProfile.address_line1}
-                          {dashboardData.businessProfile.address_line2 && <br />}
-                          {dashboardData.businessProfile.address_line2}
-                          <br />
-                          {dashboardData.businessProfile.city}, {dashboardData.businessProfile.state} {dashboardData.businessProfile.zip_code}
-                        </p>
+                      <div className="flex items-start space-x-3">
+                        <MapPin className="w-5 h-5 text-gray-400 mt-1" />
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Address</Label>
+                          <p className="text-gray-900">
+                            {dashboardData.businessProfile.address_line1}
+                            {dashboardData.businessProfile.address_line2 && <br />}
+                            {dashboardData.businessProfile.address_line2}
+                            <br />
+                            {dashboardData.businessProfile.city}, {dashboardData.businessProfile.state} {dashboardData.businessProfile.zip_code}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-500">Contact Information</Label>
-                        <p className="text-gray-900">
-                          Phone: {dashboardData.businessProfile.phone}<br />
-                          Email: {dashboardData.businessProfile.email}
-                        </p>
+                      <div className="flex items-start space-x-3">
+                        <Phone className="w-5 h-5 text-gray-400 mt-1" />
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Contact Information</Label>
+                          <p className="text-gray-900">
+                            Phone: {dashboardData.businessProfile.phone}<br />
+                            Email: {dashboardData.businessProfile.email}
+                          </p>
+                        </div>
                       </div>
                       {dashboardData.businessProfile.description && (
-                        <div className="md:col-span-2">
-                          <Label className="text-sm font-medium text-gray-500">Description</Label>
-                          <p className="text-gray-900">{dashboardData.businessProfile.description}</p>
+                        <div className="md:col-span-2 flex items-start space-x-3">
+                          <FileText className="w-5 h-5 text-gray-400 mt-1" />
+                          <div>
+                            <Label className="text-sm font-medium text-gray-500">Description</Label>
+                            <p className="text-gray-900">{dashboardData.businessProfile.description}</p>
+                          </div>
                         </div>
                       )}
                     </div>
                   )}
                 </CardContent>
               </Card>
-            </TabsContent>
+            </div>
+          )}
 
-            {/* Personal Information Tab */}
-            <TabsContent value="personal">
-              <div className="space-y-6">
-                {/* Owner Information */}
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>Owner Information</CardTitle>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        if (isEditingPersonal) {
-                          setPersonalForm(dashboardData.ownerInfo);
-                        }
-                        setIsEditingPersonal(!isEditingPersonal);
-                      }}
-                    >
-                      {isEditingPersonal ? <X className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
-                      {isEditingPersonal ? 'Cancel' : 'Edit'}
-                    </Button>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {isEditingPersonal ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="owner_name">Full Name</Label>
-                          <Input
-                            id="owner_name"
-                            value={personalForm.name || ''}
-                            onChange={(e) => setPersonalForm(prev => ({ ...prev, name: e.target.value }))}
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="owner_email">Email</Label>
-                          <Input
-                            id="owner_email"
-                            type="email"
-                            value={personalForm.email || ''}
-                            onChange={(e) => setPersonalForm(prev => ({ ...prev, email: e.target.value }))}
-                          />
-                        </div>
-                        <div className="md:col-span-2">
-                          <Label htmlFor="owner_address">Address</Label>
-                          <Textarea
-                            id="owner_address"
-                            value={personalForm.address || ''}
-                            onChange={(e) => setPersonalForm(prev => ({ ...prev, address: e.target.value }))}
-                            rows={2}
-                          />
-                        </div>
-                        <div className="md:col-span-2">
-                          <Button 
-                            onClick={handlePersonalSave}
-                            className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
-                          >
-                            <Save className="w-4 h-4 mr-2" />
-                            Save Changes
-                          </Button>
-                        </div>
+          {/* Personal Information Section */}
+          {activeSection === 'personal' && (
+            <div className="max-w-4xl space-y-6">
+              <div className="mb-6">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Personal Information</h1>
+                <p className="text-gray-600">Manage your personal details and team members</p>
+              </div>
+
+              {/* Owner Information */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>Owner Information</CardTitle>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (isEditingPersonal) {
+                        setPersonalForm(dashboardData.ownerInfo);
+                      }
+                      setIsEditingPersonal(!isEditingPersonal);
+                    }}
+                  >
+                    {isEditingPersonal ? <X className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
+                    {isEditingPersonal ? 'Cancel' : 'Edit'}
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {isEditingPersonal ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="owner_name">Full Name</Label>
+                        <Input
+                          id="owner_name"
+                          value={personalForm.name || ''}
+                          onChange={(e) => setPersonalForm(prev => ({ ...prev, name: e.target.value }))}
+                        />
                       </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="owner_email">Email</Label>
+                        <Input
+                          id="owner_email"
+                          type="email"
+                          value={personalForm.email || ''}
+                          onChange={(e) => setPersonalForm(prev => ({ ...prev, email: e.target.value }))}
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label htmlFor="owner_address">Address</Label>
+                        <Textarea
+                          id="owner_address"
+                          value={personalForm.address || ''}
+                          onChange={(e) => setPersonalForm(prev => ({ ...prev, address: e.target.value }))}
+                          rows={2}
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Button 
+                          onClick={handlePersonalSave}
+                          className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
+                        >
+                          <Save className="w-4 h-4 mr-2" />
+                          Save Changes
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center space-x-3">
+                        <User className="w-5 h-5 text-gray-400" />
                         <div>
                           <Label className="text-sm font-medium text-gray-500">Full Name</Label>
                           <p className="text-gray-900">{dashboardData.ownerInfo.name}</p>
                         </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <Mail className="w-5 h-5 text-gray-400" />
                         <div>
                           <Label className="text-sm font-medium text-gray-500">Email</Label>
                           <p className="text-gray-900">{dashboardData.ownerInfo.email}</p>
                         </div>
-                        <div className="md:col-span-2">
+                      </div>
+                      <div className="md:col-span-2 flex items-start space-x-3">
+                        <MapPin className="w-5 h-5 text-gray-400 mt-1" />
+                        <div>
                           <Label className="text-sm font-medium text-gray-500">Address</Label>
                           <p className="text-gray-900">{dashboardData.ownerInfo.address}</p>
                         </div>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-                {/* Legacy Team Members */}
-                {members.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center space-x-2">
-                        <Users className="w-5 h-5" />
-                        <span>Legacy Team Members</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {members.map((member) => (
-                          <div key={member.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                            <div className="flex-1">
+              {/* Team Members Section */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="flex items-center space-x-2">
+                    <Users className="w-5 h-5" />
+                    <span>Team Members</span>
+                  </CardTitle>
+                  <Button
+                    onClick={handleAddTeamMember}
+                    className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
+                  >
+                    <Users className="w-4 h-4 mr-2" />
+                    Add Member
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {teamMembers.length === 0 && members.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No team members yet</h3>
+                      <p className="text-gray-600 mb-4">Add team members to collaborate on your business.</p>
+                      <Button
+                        onClick={handleAddTeamMember}
+                        className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
+                      >
+                        Add Your First Team Member
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Current Team Members */}
+                      {teamMembers.map((member) => (
+                        <div key={member.id} className="border rounded-lg p-4">
+                          {editingMemberId === member.id ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              <div>
+                                <Label htmlFor={`name-${member.id}`}>Name *</Label>
+                                <Input
+                                  id={`name-${member.id}`}
+                                  value={memberForms[member.id]?.name || ''}
+                                  onChange={(e) => {
+                                    setMemberForms(prev => ({
+                                      ...prev,
+                                      [member.id]: { ...prev[member.id], name: e.target.value }
+                                    }));
+                                    setHasChanges(true);
+                                  }}
+                                  placeholder="Enter name"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor={`role-${member.id}`}>Role</Label>
+                                <Input
+                                  id={`role-${member.id}`}
+                                  value={memberForms[member.id]?.role || ''}
+                                  onChange={(e) => {
+                                    setMemberForms(prev => ({
+                                      ...prev,
+                                      [member.id]: { ...prev[member.id], role: e.target.value }
+                                    }));
+                                    setHasChanges(true);
+                                  }}
+                                  placeholder="Enter role"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor={`email-${member.id}`}>Email</Label>
+                                <Input
+                                  id={`email-${member.id}`}
+                                  type="email"
+                                  value={memberForms[member.id]?.email || ''}
+                                  onChange={(e) => {
+                                    setMemberForms(prev => ({
+                                      ...prev,
+                                      [member.id]: { ...prev[member.id], email: e.target.value }
+                                    }));
+                                    setHasChanges(true);
+                                  }}
+                                  placeholder="Enter email"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor={`phone-${member.id}`}>Phone</Label>
+                                <Input
+                                  id={`phone-${member.id}`}
+                                  type="tel"
+                                  value={memberForms[member.id]?.phone || ''}
+                                  onChange={(e) => {
+                                    setMemberForms(prev => ({
+                                      ...prev,
+                                      [member.id]: { ...prev[member.id], phone: e.target.value }
+                                    }));
+                                    setHasChanges(true);
+                                  }}
+                                  placeholder="Enter phone"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor={`status-${member.id}`}>Status</Label>
+                                <select
+                                  id={`status-${member.id}`}
+                                  value={memberForms[member.id]?.status || 'active'}
+                                  onChange={(e) => {
+                                    setMemberForms(prev => ({
+                                      ...prev,
+                                      [member.id]: { ...prev[member.id], status: e.target.value as 'active' | 'inactive' }
+                                    }));
+                                    setHasChanges(true);
+                                  }}
+                                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                >
+                                  <option value="active">Active</option>
+                                  <option value="inactive">Inactive</option>
+                                </select>
+                              </div>
+                              <div className="flex items-end space-x-2">
+                                <Button
+                                  variant="outline"
+                                  onClick={() => {
+                                    setMemberForms(prev => ({
+                                      ...prev,
+                                      [member.id]: { ...member }
+                                    }));
+                                    setEditingMemberId(null);
+                                    setHasChanges(false);
+                                  }}
+                                  disabled={isSaving}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  onClick={() => handleMemberSave(member.id)}
+                                  disabled={isSaving}
+                                  className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
+                                >
+                                  {isSaving ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                      Saving...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Check className="w-4 h-4 mr-2" />
+                                      Save
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <Avatar className="w-10 h-10">
+                                  <AvatarFallback className="bg-gray-200 text-gray-600">
+                                    {getInitials(member.name)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <h4 className="font-medium text-gray-900">{member.name}</h4>
+                                  <p className="text-sm text-gray-600">{member.role}</p>
+                                  <div className="flex items-center space-x-4 mt-1">
+                                    {member.email && (
+                                      <span className="text-xs text-gray-500">{member.email}</span>
+                                    )}
+                                    {member.phone && (
+                                      <span className="text-xs text-gray-500">{member.phone}</span>
+                                    )}
+                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(member.status)}`}>
+                                      {member.status}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setEditingMemberId(member.id)}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                  Edit
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleRemoveTeamMember(member.id)}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+
+                      {/* Legacy Team Members */}
+                      {members.map((member) => (
+                        <div key={member.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
+                          <div className="flex items-center space-x-4">
+                            <Avatar className="w-10 h-10">
+                              <AvatarFallback className="bg-gray-200 text-gray-600">
+                                {getInitials(member.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
                               <h4 className="font-medium text-gray-900">{member.name}</h4>
                               <p className="text-sm text-gray-600">{member.email}</p>
                               {member.phone && <p className="text-sm text-gray-600">{member.phone}</p>}
                               {member.address && <p className="text-sm text-gray-600">{member.address}</p>}
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-600 mt-1">
+                                Legacy Member
+                              </span>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoveMember(member.id)}
-                              className="text-red-600 hover:text-red-800"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
                           </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </TabsContent>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveMember(member.id)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
-            {/* Document Portal Tab */}
-            <TabsContent value="documents">
+          {/* Document Portal Section */}
+          {activeSection === 'documents' && (
+            <div className="max-w-4xl">
+              <div className="mb-6">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Document Portal</h1>
+                <p className="text-gray-600">Track and download your business formation documents</p>
+              </div>
+
               <Card>
                 <CardHeader>
-                  <CardTitle>Document Portal</CardTitle>
+                  <CardTitle>Your Documents</CardTitle>
                   <p className="text-sm text-gray-600">
                     Track the status of your business formation documents and download them when ready.
                   </p>
@@ -1196,12 +1096,14 @@ export const Dashboard = () => {
                 <CardContent>
                   <div className="space-y-4">
                     {documents.map((doc) => (
-                      <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div key={doc.id} className="flex items-center justify-between p-6 border rounded-lg hover:bg-gray-50 transition-colors">
                         <div className="flex items-center space-x-4">
-                          <FileText className="w-8 h-8 text-gray-400" />
+                          <div className="p-3 bg-gray-100 rounded-lg">
+                            <FileText className="w-8 h-8 text-gray-600" />
+                          </div>
                           <div>
-                            <h4 className="font-medium text-gray-900">{doc.name}</h4>
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(doc.status)}`}>
+                            <h4 className="font-medium text-gray-900 text-lg">{doc.name}</h4>
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(doc.status)}`}>
                               {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
                             </span>
                           </div>
@@ -1209,8 +1111,7 @@ export const Dashboard = () => {
                         <div>
                           {doc.status === 'ready' && doc.downloadUrl ? (
                             <Button
-                              variant="outline"
-                              size="sm"
+                              className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
                               onClick={() => {
                                 toast({
                                   title: "Download Started",
@@ -1222,7 +1123,7 @@ export const Dashboard = () => {
                               Download
                             </Button>
                           ) : (
-                            <Button variant="outline" size="sm" disabled>
+                            <Button variant="outline" disabled>
                               {doc.status === 'pending' ? 'Processing' : 'Not Ready'}
                             </Button>
                           )}
@@ -1231,18 +1132,27 @@ export const Dashboard = () => {
                     ))}
                   </div>
                   
-                  <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                    <h4 className="font-medium text-blue-900 mb-2">Document Status Information</h4>
-                    <ul className="text-sm text-blue-800 space-y-1">
-                      <li><strong>Pending:</strong> Document is being prepared</li>
-                      <li><strong>Ready:</strong> Document is available for download</li>
-                      <li><strong>Completed:</strong> Document has been downloaded and processed</li>
+                  <div className="mt-8 p-6 bg-blue-50 rounded-lg">
+                    <h4 className="font-medium text-blue-900 mb-3">Document Status Information</h4>
+                    <ul className="text-sm text-blue-800 space-y-2">
+                      <li className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                        <span><strong>Pending:</strong> Document is being prepared by our team</span>
+                      </li>
+                      <li className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span><strong>Ready:</strong> Document is available for download</span>
+                      </li>
+                      <li className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span><strong>Completed:</strong> Document has been downloaded and processed</span>
+                      </li>
                     </ul>
                   </div>
                 </CardContent>
               </Card>
-            </TabsContent>
-          </Tabs>
+            </div>
+          )}
         </div>
       </div>
       
