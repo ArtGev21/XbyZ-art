@@ -29,7 +29,13 @@ import {
   AlertCircle,
   FileUp,
   Check,
-  Database
+  Database,
+  Users,
+  Phone,
+  Mail,
+  MapPin,
+  Briefcase,
+  ChevronRight
 } from 'lucide-react';
 
 interface BusinessProfile {
@@ -71,6 +77,12 @@ interface TeamMember {
   created_at: string;
 }
 
+interface ApplicationData {
+  businessProfile: BusinessProfile;
+  userProfile: UserProfile | null;
+  teamMembers: TeamMember[];
+}
+
 interface Document {
   id: string;
   business_profile_id: string;
@@ -86,16 +98,14 @@ export const AdminDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  const [businessProfiles, setBusinessProfiles] = useState<BusinessProfile[]>([]);
-  const [filteredProfiles, setFilteredProfiles] = useState<BusinessProfile[]>([]);
+  const [applications, setApplications] = useState<ApplicationData[]>([]);
+  const [filteredApplications, setFilteredApplications] = useState<ApplicationData[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [businessTypeFilter, setBusinessTypeFilter] = useState('all');
-  const [selectedProfile, setSelectedProfile] = useState<BusinessProfile | null>(null);
-  const [selectedUserProfile, setSelectedUserProfile] = useState<UserProfile | null>(null);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [selectedApplication, setSelectedApplication] = useState<ApplicationData | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [isLoadingProfiles, setIsLoadingProfiles] = useState(false);
+  const [isLoadingApplications, setIsLoadingApplications] = useState(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -103,7 +113,7 @@ export const AdminDashboard = () => {
 
   // Check if user is admin
   useEffect(() => {
-    if (loading) return; // Wait for auth to load
+    if (loading) return;
 
     if (!user) {
       navigate('/');
@@ -120,17 +130,22 @@ export const AdminDashboard = () => {
       return;
     }
 
-    loadBusinessProfiles();
+    loadApplications();
     
-    // Set up real-time subscription for business profiles
+    // Set up real-time subscription
     const subscription = supabase
-      .channel('admin_business_profiles')
+      .channel('admin_applications')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'business_profiles' },
-        (payload) => {
-          console.log('Business profile changed:', payload);
-          loadBusinessProfiles(); // Reload all profiles on any change
-        }
+        () => loadApplications()
+      )
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'user_profiles' },
+        () => loadApplications()
+      )
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'team_members' },
+        () => loadApplications()
       )
       .subscribe();
 
@@ -139,116 +154,132 @@ export const AdminDashboard = () => {
     };
   }, [user, isAdmin, loading, navigate, toast]);
 
-  const loadBusinessProfiles = async () => {
-    setIsLoadingProfiles(true);
+  const loadApplications = async () => {
+    setIsLoadingApplications(true);
     try {
-      const { data, error } = await supabase
+      // First, get all business profiles
+      const { data: businessProfiles, error: businessError } = await supabase
         .from('business_profiles')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (businessError) throw businessError;
 
-      console.log('Loaded business profiles:', data);
-      setBusinessProfiles(data || []);
-      setFilteredProfiles(data || []);
-      
-      // Show success message with count
-      if (data && data.length > 0) {
+      if (!businessProfiles || businessProfiles.length === 0) {
+        setApplications([]);
+        setFilteredApplications([]);
         toast({
-          title: "Applications Loaded",
-          description: `Found ${data.length} business application(s) in the database.`,
+          title: "No Applications",
+          description: "No business applications found in the database.",
         });
+        return;
       }
+
+      // Get unique user IDs from business profiles
+      const userIds = [...new Set(businessProfiles.map(bp => bp.user_id))];
+
+      // Fetch user profiles for these user IDs
+      const { data: userProfiles, error: userError } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .in('id', userIds);
+
+      if (userError) console.error('Error loading user profiles:', userError);
+
+      // Fetch team members for these user IDs
+      const { data: teamMembers, error: teamError } = await supabase
+        .from('team_members')
+        .select('*')
+        .in('user_id', userIds);
+
+      if (teamError) console.error('Error loading team members:', teamError);
+
+      // Combine the data
+      const applicationsData: ApplicationData[] = businessProfiles.map(businessProfile => {
+        const userProfile = userProfiles?.find(up => up.id === businessProfile.user_id) || null;
+        const userTeamMembers = teamMembers?.filter(tm => tm.user_id === businessProfile.user_id) || [];
+
+        return {
+          businessProfile,
+          userProfile,
+          teamMembers: userTeamMembers
+        };
+      });
+
+      console.log('Loaded applications with connected data:', applicationsData);
+      setApplications(applicationsData);
+      setFilteredApplications(applicationsData);
+      
+      toast({
+        title: "Applications Loaded",
+        description: `Found ${applicationsData.length} business application(s) with connected data.`,
+      });
+
     } catch (error) {
-      console.error('Error loading business profiles:', error);
+      console.error('Error loading applications:', error);
       toast({
         title: "Error",
-        description: "Failed to load business profiles.",
+        description: "Failed to load applications.",
         variant: "destructive",
       });
     } finally {
-      setIsLoadingProfiles(false);
+      setIsLoadingApplications(false);
     }
   };
 
-  // Enhanced search with better filtering
+  // Enhanced search and filtering
   useEffect(() => {
-    let filtered = businessProfiles;
+    let filtered = applications;
 
-    // Search filter - more comprehensive search
+    // Search filter
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(profile => 
-        profile.business_name.toLowerCase().includes(searchLower) ||
-        profile.email.toLowerCase().includes(searchLower) ||
-        profile.business_type.toLowerCase().includes(searchLower) ||
-        profile.phone.includes(searchTerm) ||
-        profile.city.toLowerCase().includes(searchLower) ||
-        profile.zip_code.includes(searchTerm) ||
-        (profile.description && profile.description.toLowerCase().includes(searchLower)) ||
-        (profile.tax_id && profile.tax_id.includes(searchTerm))
-      );
+      filtered = filtered.filter(app => {
+        const bp = app.businessProfile;
+        const up = app.userProfile;
+        
+        return (
+          bp.business_name.toLowerCase().includes(searchLower) ||
+          bp.email.toLowerCase().includes(searchLower) ||
+          bp.business_type.toLowerCase().includes(searchLower) ||
+          bp.phone.includes(searchTerm) ||
+          bp.city.toLowerCase().includes(searchLower) ||
+          bp.zip_code.includes(searchTerm) ||
+          (bp.description && bp.description.toLowerCase().includes(searchLower)) ||
+          (bp.tax_id && bp.tax_id.includes(searchTerm)) ||
+          (up && up.full_name.toLowerCase().includes(searchLower)) ||
+          (up && up.email.toLowerCase().includes(searchLower)) ||
+          app.teamMembers.some(tm => 
+            tm.name.toLowerCase().includes(searchLower) ||
+            tm.email.toLowerCase().includes(searchLower)
+          )
+        );
+      });
     }
 
     // Status filter
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(profile => profile.status === statusFilter);
+      filtered = filtered.filter(app => app.businessProfile.status === statusFilter);
     }
 
     // Business type filter
     if (businessTypeFilter !== 'all') {
-      filtered = filtered.filter(profile => profile.business_type === businessTypeFilter);
+      filtered = filtered.filter(app => app.businessProfile.business_type === businessTypeFilter);
     }
 
-    setFilteredProfiles(filtered);
+    setFilteredApplications(filtered);
     
     // Auto-select first result if searching and results found
-    if (searchTerm && filtered.length > 0 && !selectedProfile) {
-      handleProfileSelect(filtered[0]);
+    if (searchTerm && filtered.length > 0 && !selectedApplication) {
+      handleApplicationSelect(filtered[0]);
     }
-  }, [searchTerm, statusFilter, businessTypeFilter, businessProfiles]);
+  }, [searchTerm, statusFilter, businessTypeFilter, applications]);
 
-  const loadUserProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
-
-      setSelectedUserProfile(data);
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-      setSelectedUserProfile(null);
-    }
-  };
-
-  const loadTeamMembers = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('team_members')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      setTeamMembers(data || []);
-    } catch (error) {
-      console.error('Error loading team members:', error);
-      setTeamMembers([]);
-    }
-  };
-
-  const loadDocuments = async (profileId: string) => {
+  const loadDocuments = async (profileId: string, businessType: string) => {
     // Enhanced mock documents based on business type
-    const profile = selectedProfile;
     let mockDocs: Document[] = [];
 
-    if (profile?.business_type === 'llc') {
+    if (businessType === 'llc') {
       mockDocs = [
         {
           id: '1',
@@ -279,7 +310,7 @@ export const AdminDashboard = () => {
           type: 'compliance'
         }
       ];
-    } else if (profile?.business_type === 'corporation') {
+    } else if (businessType === 'corporation') {
       mockDocs = [
         {
           id: '1',
@@ -339,27 +370,23 @@ export const AdminDashboard = () => {
     setDocuments(mockDocs);
   };
 
-  const handleProfileSelect = async (profile: BusinessProfile) => {
-    setSelectedProfile(profile);
+  const handleApplicationSelect = async (application: ApplicationData) => {
+    setSelectedApplication(application);
     setIsLoadingDetails(true);
     setActiveTab('overview');
     
     try {
-      await Promise.all([
-        loadUserProfile(profile.user_id),
-        loadTeamMembers(profile.user_id),
-        loadDocuments(profile.id)
-      ]);
+      await loadDocuments(application.businessProfile.id, application.businessProfile.business_type);
       
       toast({
         title: "Application Loaded",
-        description: `Viewing details for ${profile.business_name}`,
+        description: `Viewing details for ${application.businessProfile.business_name}`,
       });
     } catch (error) {
-      console.error('Error loading profile details:', error);
+      console.error('Error loading application details:', error);
       toast({
         title: "Error",
-        description: "Failed to load some profile details.",
+        description: "Failed to load some application details.",
         variant: "destructive",
       });
     } finally {
@@ -418,7 +445,7 @@ export const AdminDashboard = () => {
     fileInput.click();
   };
 
-  const updateProfileStatus = async (profileId: string, newStatus: string) => {
+  const updateApplicationStatus = async (profileId: string, newStatus: string) => {
     try {
       const { error } = await supabase
         .from('business_profiles')
@@ -431,23 +458,33 @@ export const AdminDashboard = () => {
       if (error) throw error;
 
       // Update local state
-      setBusinessProfiles(prev => prev.map(profile => 
-        profile.id === profileId 
-          ? { ...profile, status: newStatus, updated_at: new Date().toISOString() }
-          : profile
+      setApplications(prev => prev.map(app => 
+        app.businessProfile.id === profileId 
+          ? { 
+              ...app, 
+              businessProfile: { 
+                ...app.businessProfile, 
+                status: newStatus, 
+                updated_at: new Date().toISOString() 
+              }
+            }
+          : app
       ));
 
-      if (selectedProfile?.id === profileId) {
-        setSelectedProfile(prev => prev ? { 
+      if (selectedApplication?.businessProfile.id === profileId) {
+        setSelectedApplication(prev => prev ? { 
           ...prev, 
-          status: newStatus, 
-          updated_at: new Date().toISOString() 
+          businessProfile: {
+            ...prev.businessProfile,
+            status: newStatus, 
+            updated_at: new Date().toISOString() 
+          }
         } : null);
       }
 
       toast({
         title: "Status Updated",
-        description: `Business profile status updated to ${newStatus.replace('_', ' ')}.`,
+        description: `Application status updated to ${newStatus.replace('_', ' ')}.`,
       });
     } catch (error) {
       console.error('Error updating status:', error);
@@ -527,12 +564,12 @@ export const AdminDashboard = () => {
                 </div>
               </div>
               <Button
-                onClick={loadBusinessProfiles}
-                disabled={isLoadingProfiles}
+                onClick={loadApplications}
+                disabled={isLoadingApplications}
                 variant="outline"
                 className="flex items-center space-x-2"
               >
-                <RefreshCw className={`w-4 h-4 ${isLoadingProfiles ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-4 h-4 ${isLoadingApplications ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
               </Button>
             </div>
@@ -545,7 +582,7 @@ export const AdminDashboard = () => {
                     <Building2 className="w-5 h-5 text-blue-600" />
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Applications</p>
-                      <p className="text-2xl font-bold text-gray-900">{businessProfiles.length}</p>
+                      <p className="text-2xl font-bold text-gray-900">{applications.length}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -557,7 +594,7 @@ export const AdminDashboard = () => {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Pending Review</p>
                       <p className="text-2xl font-bold text-gray-900">
-                        {businessProfiles.filter(p => p.status === 'submitted' || p.status === 'in_review').length}
+                        {applications.filter(app => app.businessProfile.status === 'submitted' || app.businessProfile.status === 'in_review').length}
                       </p>
                     </div>
                   </div>
@@ -570,7 +607,7 @@ export const AdminDashboard = () => {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Approved</p>
                       <p className="text-2xl font-bold text-gray-900">
-                        {businessProfiles.filter(p => p.status === 'approved').length}
+                        {applications.filter(app => app.businessProfile.status === 'approved').length}
                       </p>
                     </div>
                   </div>
@@ -583,7 +620,7 @@ export const AdminDashboard = () => {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Rejected</p>
                       <p className="text-2xl font-bold text-gray-900">
-                        {businessProfiles.filter(p => p.status === 'rejected').length}
+                        {applications.filter(app => app.businessProfile.status === 'rejected').length}
                       </p>
                     </div>
                   </div>
@@ -607,13 +644,13 @@ export const AdminDashboard = () => {
 
             <TabsContent value="applications">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left Panel - Business Profiles List */}
+                {/* Left Panel - Applications Table */}
                 <div className="lg:col-span-1">
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center space-x-2">
                         <Building2 className="w-5 h-5" />
-                        <span>Business Applications ({filteredProfiles.length})</span>
+                        <span>Applications ({filteredApplications.length})</span>
                       </CardTitle>
                       
                       {/* Search and Filter */}
@@ -621,7 +658,7 @@ export const AdminDashboard = () => {
                         <div className="relative">
                           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                           <Input
-                            placeholder="Search by business name, email, phone..."
+                            placeholder="Search applications..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="pl-10"
@@ -661,14 +698,14 @@ export const AdminDashboard = () => {
                     </CardHeader>
                     
                     <CardContent className="max-h-96 overflow-y-auto">
-                      {isLoadingProfiles ? (
+                      {isLoadingApplications ? (
                         <div className="text-center py-4">
                           <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-custom-dark-maroon" />
                           <p>Loading applications...</p>
                         </div>
-                      ) : filteredProfiles.length === 0 ? (
+                      ) : filteredApplications.length === 0 ? (
                         <div className="text-center py-4 text-gray-500">
-                          {businessProfiles.length === 0 ? (
+                          {applications.length === 0 ? (
                             <div>
                               <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                               <p className="font-medium">No applications found</p>
@@ -684,28 +721,67 @@ export const AdminDashboard = () => {
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          {filteredProfiles.map((profile) => (
+                          {filteredApplications.map((application) => (
                             <div
-                              key={profile.id}
-                              onClick={() => handleProfileSelect(profile)}
+                              key={application.businessProfile.id}
+                              onClick={() => handleApplicationSelect(application)}
                               className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
-                                selectedProfile?.id === profile.id 
+                                selectedApplication?.businessProfile.id === application.businessProfile.id 
                                   ? 'border-custom-dark-maroon bg-custom-dark-maroon/5 shadow-md' 
                                   : 'border-gray-200 hover:border-gray-300'
                               }`}
                             >
                               <div className="flex justify-between items-start mb-3">
-                                <h4 className="font-semibold text-gray-900 text-sm">{profile.business_name}</h4>
-                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(profile.status)}`}>
-                                  {getStatusIcon(profile.status)}
-                                  <span className="ml-1">{profile.status.replace('_', ' ')}</span>
+                                <div className="flex-1">
+                                  {/* Business Name - Large and prominent */}
+                                  <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                                    {application.businessProfile.business_name}
+                                  </h3>
+                                  {/* Business Type - Small and gray */}
+                                  <p className="text-sm text-gray-500 capitalize mb-2">
+                                    {formatBusinessType(application.businessProfile.business_type)}
+                                  </p>
+                                </div>
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(application.businessProfile.status)}`}>
+                                  {getStatusIcon(application.businessProfile.status)}
+                                  <span className="ml-1">{application.businessProfile.status.replace('_', ' ')}</span>
                                 </span>
                               </div>
+                              
                               <div className="space-y-1">
-                                <p className="text-xs text-gray-600 capitalize">{formatBusinessType(profile.business_type)}</p>
-                                <p className="text-xs text-gray-500">{profile.email}</p>
-                                <p className="text-xs text-gray-500">{profile.city}, {profile.state}</p>
-                                <p className="text-xs text-gray-400">{new Date(profile.created_at).toLocaleDateString()}</p>
+                                {/* Owner Info */}
+                                {application.userProfile && (
+                                  <div className="flex items-center text-sm text-gray-600">
+                                    <User className="w-4 h-4 mr-2" />
+                                    <span>{application.userProfile.full_name}</span>
+                                  </div>
+                                )}
+                                
+                                {/* Contact Info */}
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <Mail className="w-4 h-4 mr-2" />
+                                  <span>{application.businessProfile.email}</span>
+                                </div>
+                                
+                                {/* Location */}
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <MapPin className="w-4 h-4 mr-2" />
+                                  <span>{application.businessProfile.city}, {application.businessProfile.state}</span>
+                                </div>
+                                
+                                {/* Team Members Count */}
+                                {application.teamMembers.length > 0 && (
+                                  <div className="flex items-center text-sm text-gray-600">
+                                    <Users className="w-4 h-4 mr-2" />
+                                    <span>{application.teamMembers.length} team member{application.teamMembers.length !== 1 ? 's' : ''}</span>
+                                  </div>
+                                )}
+                                
+                                {/* Date */}
+                                <div className="flex items-center text-xs text-gray-400 mt-2">
+                                  <Calendar className="w-3 h-3 mr-1" />
+                                  <span>Created {new Date(application.businessProfile.created_at).toLocaleDateString()}</span>
+                                </div>
                               </div>
                             </div>
                           ))}
@@ -715,28 +791,33 @@ export const AdminDashboard = () => {
                   </Card>
                 </div>
 
-                {/* Right Panel - Selected Business Details */}
+                {/* Right Panel - Selected Application Details */}
                 <div className="lg:col-span-2">
-                  {selectedProfile ? (
+                  {selectedApplication ? (
                     <div className="space-y-6">
-                      {/* Business Header */}
+                      {/* Application Header */}
                       <Card>
                         <CardHeader className="flex flex-row items-center justify-between">
                           <div>
                             <CardTitle className="flex items-center space-x-2">
                               <Building2 className="w-5 h-5" />
-                              <span>{selectedProfile.business_name}</span>
+                              <span>{selectedApplication.businessProfile.business_name}</span>
                             </CardTitle>
                             <p className="text-sm text-gray-600 mt-1">
-                              {formatBusinessType(selectedProfile.business_type)} • Created {new Date(selectedProfile.created_at).toLocaleDateString()}
+                              {formatBusinessType(selectedApplication.businessProfile.business_type)} • Created {new Date(selectedApplication.businessProfile.created_at).toLocaleDateString()}
                             </p>
+                            {selectedApplication.userProfile && (
+                              <p className="text-sm text-gray-500">
+                                Owner: {selectedApplication.userProfile.full_name}
+                              </p>
+                            )}
                           </div>
                           <div className="flex items-center space-x-2">
                             <Label htmlFor="status-select" className="text-sm">Status:</Label>
                             <select
                               id="status-select"
-                              value={selectedProfile.status}
-                              onChange={(e) => updateProfileStatus(selectedProfile.id, e.target.value)}
+                              value={selectedApplication.businessProfile.status}
+                              onChange={(e) => updateApplicationStatus(selectedApplication.businessProfile.id, e.target.value)}
                               className="flex h-8 rounded-md border border-input bg-background px-2 py-1 text-sm"
                             >
                               <option value="draft">Draft</option>
@@ -752,9 +833,9 @@ export const AdminDashboard = () => {
                       {/* Tabs for different sections */}
                       <Tabs value={activeTab} onValueChange={setActiveTab}>
                         <TabsList className="grid w-full grid-cols-4">
-                          <TabsTrigger value="overview">Overview</TabsTrigger>
-                          <TabsTrigger value="owner">Owner Info</TabsTrigger>
-                          <TabsTrigger value="team">Team</TabsTrigger>
+                          <TabsTrigger value="overview">Business</TabsTrigger>
+                          <TabsTrigger value="owner">Owner</TabsTrigger>
+                          <TabsTrigger value="team">Team ({selectedApplication.teamMembers.length})</TabsTrigger>
                           <TabsTrigger value="documents">Documents</TabsTrigger>
                         </TabsList>
 
@@ -764,52 +845,45 @@ export const AdminDashboard = () => {
                               <CardTitle>Business Information</CardTitle>
                             </CardHeader>
                             <CardContent>
-                              {isLoadingDetails ? (
-                                <div className="text-center py-4">
-                                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-custom-dark-maroon" />
-                                  <p>Loading details...</p>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <Label className="text-sm font-medium text-gray-500">Business Name</Label>
+                                  <p className="text-gray-900">{selectedApplication.businessProfile.business_name}</p>
                                 </div>
-                              ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <Label className="text-sm font-medium text-gray-500">Business Type</Label>
+                                  <p className="text-gray-900">{formatBusinessType(selectedApplication.businessProfile.business_type)}</p>
+                                </div>
+                                <div>
+                                  <Label className="text-sm font-medium text-gray-500">Email</Label>
+                                  <p className="text-gray-900">{selectedApplication.businessProfile.email}</p>
+                                </div>
+                                <div>
+                                  <Label className="text-sm font-medium text-gray-500">Phone</Label>
+                                  <p className="text-gray-900">{selectedApplication.businessProfile.phone}</p>
+                                </div>
+                                <div className="md:col-span-2">
+                                  <Label className="text-sm font-medium text-gray-500">Address</Label>
+                                  <p className="text-gray-900">
+                                    {selectedApplication.businessProfile.address_line1}
+                                    {selectedApplication.businessProfile.address_line2 && <>, {selectedApplication.businessProfile.address_line2}</>}
+                                    <br />
+                                    {selectedApplication.businessProfile.city}, {selectedApplication.businessProfile.state} {selectedApplication.businessProfile.zip_code}
+                                  </p>
+                                </div>
+                                {selectedApplication.businessProfile.tax_id && (
                                   <div>
-                                    <Label className="text-sm font-medium text-gray-500">Business Name</Label>
-                                    <p className="text-gray-900">{selectedProfile.business_name}</p>
+                                    <Label className="text-sm font-medium text-gray-500">Tax ID</Label>
+                                    <p className="text-gray-900">{selectedApplication.businessProfile.tax_id}</p>
                                   </div>
-                                  <div>
-                                    <Label className="text-sm font-medium text-gray-500">Business Type</Label>
-                                    <p className="text-gray-900">{formatBusinessType(selectedProfile.business_type)}</p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-sm font-medium text-gray-500">Email</Label>
-                                    <p className="text-gray-900">{selectedProfile.email}</p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-sm font-medium text-gray-500">Phone</Label>
-                                    <p className="text-gray-900">{selectedProfile.phone}</p>
-                                  </div>
+                                )}
+                                {selectedApplication.businessProfile.description && (
                                   <div className="md:col-span-2">
-                                    <Label className="text-sm font-medium text-gray-500">Address</Label>
-                                    <p className="text-gray-900">
-                                      {selectedProfile.address_line1}
-                                      {selectedProfile.address_line2 && <>, {selectedProfile.address_line2}</>}
-                                      <br />
-                                      {selectedProfile.city}, {selectedProfile.state} {selectedProfile.zip_code}
-                                    </p>
+                                    <Label className="text-sm font-medium text-gray-500">Description</Label>
+                                    <p className="text-gray-900">{selectedApplication.businessProfile.description}</p>
                                   </div>
-                                  {selectedProfile.tax_id && (
-                                    <div>
-                                      <Label className="text-sm font-medium text-gray-500">Tax ID</Label>
-                                      <p className="text-gray-900">{selectedProfile.tax_id}</p>
-                                    </div>
-                                  )}
-                                  {selectedProfile.description && (
-                                    <div className="md:col-span-2">
-                                      <Label className="text-sm font-medium text-gray-500">Description</Label>
-                                      <p className="text-gray-900">{selectedProfile.description}</p>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
+                                )}
+                              </div>
                             </CardContent>
                           </Card>
                         </TabsContent>
@@ -820,32 +894,27 @@ export const AdminDashboard = () => {
                               <CardTitle>Owner Information</CardTitle>
                             </CardHeader>
                             <CardContent>
-                              {isLoadingDetails ? (
-                                <div className="text-center py-4">
-                                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-custom-dark-maroon" />
-                                  <p>Loading owner details...</p>
-                                </div>
-                              ) : selectedUserProfile ? (
+                              {selectedApplication.userProfile ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div>
                                     <Label className="text-sm font-medium text-gray-500">Full Name</Label>
-                                    <p className="text-gray-900">{selectedUserProfile.full_name}</p>
+                                    <p className="text-gray-900">{selectedApplication.userProfile.full_name}</p>
                                   </div>
                                   <div>
                                     <Label className="text-sm font-medium text-gray-500">Email</Label>
-                                    <p className="text-gray-900">{selectedUserProfile.email}</p>
+                                    <p className="text-gray-900">{selectedApplication.userProfile.email}</p>
                                   </div>
                                   <div>
                                     <Label className="text-sm font-medium text-gray-500">Phone</Label>
-                                    <p className="text-gray-900">{selectedUserProfile.phone || 'Not provided'}</p>
+                                    <p className="text-gray-900">{selectedApplication.userProfile.phone || 'Not provided'}</p>
                                   </div>
                                   <div>
                                     <Label className="text-sm font-medium text-gray-500">Role</Label>
-                                    <p className="text-gray-900">{selectedUserProfile.role}</p>
+                                    <p className="text-gray-900">{selectedApplication.userProfile.role}</p>
                                   </div>
                                   <div>
                                     <Label className="text-sm font-medium text-gray-500">Account Created</Label>
-                                    <p className="text-gray-900">{new Date(selectedUserProfile.created_at).toLocaleDateString()}</p>
+                                    <p className="text-gray-900">{new Date(selectedApplication.userProfile.created_at).toLocaleDateString()}</p>
                                   </div>
                                 </div>
                               ) : (
@@ -861,22 +930,17 @@ export const AdminDashboard = () => {
                         <TabsContent value="team" className="space-y-4">
                           <Card>
                             <CardHeader>
-                              <CardTitle>Team Members ({teamMembers.length})</CardTitle>
+                              <CardTitle>Team Members ({selectedApplication.teamMembers.length})</CardTitle>
                             </CardHeader>
                             <CardContent>
-                              {isLoadingDetails ? (
-                                <div className="text-center py-4">
-                                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-custom-dark-maroon" />
-                                  <p>Loading team members...</p>
-                                </div>
-                              ) : teamMembers.length === 0 ? (
+                              {selectedApplication.teamMembers.length === 0 ? (
                                 <div className="text-center py-8 text-gray-500">
-                                  <User className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                                  <Users className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                                   <p>No team members added</p>
                                 </div>
                               ) : (
                                 <div className="space-y-4">
-                                  {teamMembers.map((member) => (
+                                  {selectedApplication.teamMembers.map((member) => (
                                     <div key={member.id} className="p-4 border rounded-lg">
                                       <div className="flex justify-between items-start">
                                         <div>
@@ -911,7 +975,7 @@ export const AdminDashboard = () => {
                                 <span>Document Management</span>
                               </CardTitle>
                               <p className="text-sm text-gray-600">
-                                Upload and manage documents for {selectedProfile.business_name}
+                                Upload and manage documents for {selectedApplication.businessProfile.business_name}
                               </p>
                             </CardHeader>
                             <CardContent>
@@ -979,10 +1043,10 @@ export const AdminDashboard = () => {
                               <div className="mt-6 p-4 bg-blue-50 rounded-lg">
                                 <h4 className="font-medium text-blue-900 mb-2">Document Upload Instructions</h4>
                                 <ul className="text-sm text-blue-800 space-y-1">
-                                  <li><strong>Pending:</strong> Click "Upload File" to select and upload the document</li>
-                                  <li><strong>Ready:</strong> Document is uploaded and available for client download</li>
-                                  <li><strong>Completed:</strong> Client has downloaded the document</li>
-                                  <li><strong>Supported formats:</strong> PDF, DOC, DOCX, JPG, JPEG, PNG</li>
+                                  <li>• <strong>Pending:</strong> Click "Upload File" to select and upload the document</li>
+                                  <li>• <strong>Ready:</strong> Document is uploaded and available for client download</li>
+                                  <li>• <strong>Completed:</strong> Client has downloaded the document</li>
+                                  <li>• <strong>Supported formats:</strong> PDF, DOC, DOCX, JPG, JPEG, PNG</li>
                                 </ul>
                               </div>
                             </CardContent>
@@ -997,9 +1061,9 @@ export const AdminDashboard = () => {
                           <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                           <h3 className="text-lg font-medium text-gray-900 mb-2">Select an Application</h3>
                           <p className="text-gray-600">Choose a business application from the list to view details and manage documents.</p>
-                          {businessProfiles.length > 0 && (
+                          {applications.length > 0 && (
                             <p className="text-sm text-gray-500 mt-2">
-                              Found {businessProfiles.length} application(s) in the database.
+                              Found {applications.length} application(s) with connected data.
                             </p>
                           )}
                         </div>
