@@ -92,7 +92,7 @@ export const Header = () => {
           
           <nav className="hidden md:flex items-center space-x-8" role="navigation" aria-label="Main navigation">
             <button 
-              onClick={() => handleNavClick('/about')} 
+              onClick={() => handleNavClick('about')} 
               className="hover:text-custom-medium-gray transition-colors duration-300 focus:outline-2 focus:outline-offset-2 focus:outline-custom-dark-maroon"
             >
               About
