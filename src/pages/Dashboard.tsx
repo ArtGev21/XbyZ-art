@@ -13,6 +13,7 @@ import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { BusinessFormationForm } from '@/components/BusinessFormationForm';
 import { PricingPackages } from '@/components/PricingPackages';
+import { BusinessMemberRegistrationForm } from '@/components/BusinessMemberRegistrationForm';
 import { 
   Building2, 
   User, 
@@ -30,7 +31,10 @@ import {
   Loader2,
   MapPin,
   Plus,
-  FileCheck
+  FileCheck,
+  UserPlus,
+  Shield,
+  Calendar
 } from 'lucide-react';
 
 interface UserProfile {
@@ -52,6 +56,21 @@ interface TeamMember {
   email: string;
   phone: string;
   status: 'active' | 'inactive';
+  created_at: string;
+  updated_at: string;
+}
+
+interface BusinessMember {
+  id: string;
+  full_name: string;
+  position_title: string;
+  department: string;
+  employment_status: string;
+  start_date: string;
+  email: string;
+  phone: string;
+  reporting_manager: string;
+  access_level: string;
   created_at: string;
   updated_at: string;
 }
@@ -110,6 +129,7 @@ export const Dashboard = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [businessMembers, setBusinessMembers] = useState<BusinessMember[]>([]);
   const [activeSection, setActiveSection] = useState('business');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
@@ -126,6 +146,7 @@ export const Dashboard = () => {
   // Form modal state
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isPricingOpen, setIsPricingOpen] = useState(false);
+  const [isMemberFormOpen, setIsMemberFormOpen] = useState(false);
 
   // Mock documents for demonstration
   const [documents] = useState<Document[]>([
@@ -165,6 +186,7 @@ export const Dashboard = () => {
     loadUserProfile();
     loadBusinessProfile();
     loadTeamMembers();
+    loadBusinessMembers();
     
     // Set up real-time subscriptions
     const profileSubscription = supabase
@@ -204,10 +226,22 @@ export const Dashboard = () => {
       )
       .subscribe();
 
+    const businessMembersSubscription = supabase
+      .channel('business_members_changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'business_members' },
+        (payload) => {
+          console.log('Business member updated:', payload);
+          loadBusinessMembers(); // Reload business members on any change
+        }
+      )
+      .subscribe();
+
     return () => {
       profileSubscription.unsubscribe();
       businessSubscription.unsubscribe();
       teamSubscription.unsubscribe();
+      businessMembersSubscription.unsubscribe();
     };
   }, [user, navigate]);
 
@@ -314,6 +348,27 @@ export const Dashboard = () => {
       toast({
         title: "Error",
         description: "Failed to load team members.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadBusinessMembers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('business_members')
+        .select('id,full_name,position_title,department,employment_status,start_date,email,phone,reporting_manager,access_level,created_at,updated_at')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      console.log('Loaded business members:', data);
+      setBusinessMembers(data || []);
+    } catch (error) {
+      console.error('Error loading business members:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load business members.",
         variant: "destructive",
       });
     }
@@ -457,6 +512,29 @@ export const Dashboard = () => {
     }
   };
 
+  const handleRemoveBusinessMember = async (memberId: string) => {
+    try {
+      const { error } = await supabase
+        .from('business_members')
+        .delete()
+        .eq('id', memberId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Business member removed successfully!",
+      });
+    } catch (error) {
+      console.error('Error removing business member:', error);
+      toast({
+        title: "Error",
+        description: "Failed to remove business member.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleBusinessSave = async () => {
     if (!businessProfile?.id) return;
 
@@ -502,6 +580,14 @@ export const Dashboard = () => {
     setIsPricingOpen(true);
   };
 
+  const handleMemberRegistrationSuccess = (member: BusinessMember) => {
+    toast({
+      title: "Member Registered!",
+      description: `${member.full_name} has been successfully added to your business.`,
+    });
+    loadBusinessMembers(); // Refresh the list
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'text-yellow-600 bg-yellow-100';
@@ -509,6 +595,16 @@ export const Dashboard = () => {
       case 'completed': return 'text-blue-600 bg-blue-100';
       case 'active': return 'text-green-600 bg-green-100';
       case 'inactive': return 'text-gray-600 bg-gray-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getAccessLevelColor = (level: string) => {
+    switch (level) {
+      case 'Admin': return 'text-red-600 bg-red-100';
+      case 'Manager': return 'text-blue-600 bg-blue-100';
+      case 'Standard': return 'text-green-600 bg-green-100';
+      case 'Limited': return 'text-gray-600 bg-gray-100';
       default: return 'text-gray-600 bg-gray-100';
     }
   };
@@ -592,6 +688,23 @@ export const Dashboard = () => {
               >
                 <User className="w-5 h-5" />
                 <span className="font-medium">Personal Information</span>
+              </button>
+
+              <button
+                onClick={() => setActiveSection('members')}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                  activeSection === 'members' 
+                    ? 'bg-custom-dark-maroon text-white' 
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <Users className="w-5 h-5" />
+                <span className="font-medium">Business Members</span>
+                {businessMembers.length > 0 && (
+                  <span className="ml-auto bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-full">
+                    {businessMembers.length}
+                  </span>
+                )}
               </button>
               
               <button
@@ -1134,6 +1247,128 @@ export const Dashboard = () => {
             </div>
           )}
 
+          {/* Business Members Section */}
+          {activeSection === 'members' && (
+            <div className="max-w-6xl">
+              <div className="mb-6">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Business Members</h1>
+                <p className="text-gray-600">Manage your business team members with their roles and access levels</p>
+              </div>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="flex items-center space-x-2">
+                    <Users className="w-5 h-5" />
+                    <span>Registered Members ({businessMembers.length})</span>
+                  </CardTitle>
+                  <Button
+                    onClick={() => setIsMemberFormOpen(true)}
+                    className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
+                  >
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Register New Member
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {businessMembers.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-medium text-gray-900 mb-2">No business members registered</h3>
+                      <p className="text-gray-600 mb-6">Register your first business member to start building your team.</p>
+                      <Button
+                        onClick={() => setIsMemberFormOpen(true)}
+                        className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
+                      >
+                        <UserPlus className="w-4 h-4 mr-2" />
+                        Register First Member
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {businessMembers.map((member) => (
+                        <div key={member.id} className="border rounded-lg p-6 bg-white hover:shadow-md transition-shadow">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start space-x-4">
+                              <Avatar className="w-14 h-14">
+                                <AvatarFallback className="bg-custom-dark-maroon text-white text-lg">
+                                  {getInitials(member.full_name)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-3 mb-2">
+                                  <h4 className="font-semibold text-gray-900 text-lg">{member.full_name}</h4>
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getAccessLevelColor(member.access_level)}`}>
+                                    <Shield className="w-3 h-3 mr-1" />
+                                    {member.access_level}
+                                  </span>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                                  <div className="flex items-center space-x-2">
+                                    <Briefcase className="w-4 h-4 text-gray-400" />
+                                    <div>
+                                      <span className="font-medium text-gray-700">{member.position_title}</span>
+                                      <p className="text-gray-500">{member.department}</p>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center space-x-2">
+                                    <Mail className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-600">{member.email}</span>
+                                  </div>
+                                  
+                                  <div className="flex items-center space-x-2">
+                                    <Phone className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-600">{member.phone}</span>
+                                  </div>
+                                  
+                                  <div className="flex items-center space-x-2">
+                                    <Calendar className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-600">
+                                      Started: {new Date(member.start_date).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                  
+                                  <div className="flex items-center space-x-2">
+                                    <User className="w-4 h-4 text-gray-400" />
+                                    <span className="text-gray-600">Reports to: {member.reporting_manager}</span>
+                                  </div>
+                                  
+                                  <div className="flex items-center space-x-2">
+                                    <Briefcase className="w-4 h-4 text-gray-400" />
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                      member.employment_status === 'Full-time' ? 'bg-green-100 text-green-800' :
+                                      member.employment_status === 'Part-time' ? 'bg-blue-100 text-blue-800' :
+                                      member.employment_status === 'Contractor' ? 'bg-orange-100 text-orange-800' :
+                                      'bg-purple-100 text-purple-800'
+                                    }`}>
+                                      {member.employment_status}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveBusinessMember(member.id)}
+                                className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {/* Document Portal Section */}
           {activeSection === 'documents' && (
             <div className="max-w-4xl">
@@ -1222,6 +1457,12 @@ export const Dashboard = () => {
       <PricingPackages 
         isOpen={isPricingOpen}
         onClose={() => setIsPricingOpen(false)}
+      />
+
+      <BusinessMemberRegistrationForm
+        isOpen={isMemberFormOpen}
+        onClose={() => setIsMemberFormOpen(false)}
+        onSuccess={handleMemberRegistrationSuccess}
       />
       
       <Footer />
