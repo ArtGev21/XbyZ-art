@@ -26,7 +26,8 @@ import {
   Briefcase,
   Check,
   Loader2,
-  MapPin
+  MapPin,
+  Plus
 } from 'lucide-react';
 
 interface UserProfile {
@@ -235,6 +236,7 @@ export const Dashboard = () => {
 
       if (error) throw error;
 
+      console.log('Loaded team members:', data); // Debug log
       setTeamMembers(data || []);
       
       // Initialize member forms
@@ -372,7 +374,7 @@ export const Dashboard = () => {
 
       toast({
         title: "Success",
-        description: "New team member added!",
+        description: "New team member added! Please edit their details.",
       });
     } catch (error) {
       console.error('Error adding team member:', error);
@@ -846,174 +848,190 @@ export const Dashboard = () => {
                 </CardContent>
               </Card>
 
-              {/* Team Members Section */}
+              {/* Team Members Section - This is where the editable team members should be visible */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center space-x-2">
                     <Users className="w-5 h-5" />
-                    <span>Team Members</span>
+                    <span>Team Members ({teamMembers.length + members.length})</span>
                   </CardTitle>
                   <Button
                     onClick={handleAddTeamMember}
                     className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
                   >
-                    <Users className="w-4 h-4 mr-2" />
+                    <Plus className="w-4 h-4 mr-2" />
                     Add Member
                   </Button>
                 </CardHeader>
                 <CardContent>
                   {teamMembers.length === 0 && members.length === 0 ? (
-                    <div className="text-center py-8">
-                      <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No team members yet</h3>
-                      <p className="text-gray-600 mb-4">Add team members to collaborate on your business.</p>
+                    <div className="text-center py-12">
+                      <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-medium text-gray-900 mb-2">No team members yet</h3>
+                      <p className="text-gray-600 mb-6">Add team members to collaborate on your business projects.</p>
                       <Button
                         onClick={handleAddTeamMember}
                         className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
                       >
+                        <Plus className="w-4 h-4 mr-2" />
                         Add Your First Team Member
                       </Button>
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {/* Current Team Members */}
+                      {/* Current Team Members (Editable) */}
                       {teamMembers.map((member) => (
-                        <div key={member.id} className="border rounded-lg p-4">
+                        <div key={member.id} className="border rounded-lg p-6 bg-white">
                           {editingMemberId === member.id ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                              <div>
-                                <Label htmlFor={`name-${member.id}`}>Name *</Label>
-                                <Input
-                                  id={`name-${member.id}`}
-                                  value={memberForms[member.id]?.name || ''}
-                                  onChange={(e) => {
-                                    setMemberForms(prev => ({
-                                      ...prev,
-                                      [member.id]: { ...prev[member.id], name: e.target.value }
-                                    }));
-                                    setHasChanges(true);
-                                  }}
-                                  placeholder="Enter name"
-                                />
+                            <div className="space-y-4">
+                              <div className="flex items-center justify-between mb-4">
+                                <h4 className="text-lg font-medium text-gray-900">Edit Team Member</h4>
+                                <div className="flex items-center space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setMemberForms(prev => ({
+                                        ...prev,
+                                        [member.id]: { ...member }
+                                      }));
+                                      setEditingMemberId(null);
+                                      setHasChanges(false);
+                                    }}
+                                    disabled={isSaving}
+                                  >
+                                    <X className="w-4 h-4 mr-1" />
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleMemberSave(member.id)}
+                                    disabled={isSaving}
+                                    className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
+                                  >
+                                    {isSaving ? (
+                                      <>
+                                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                        Saving...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Check className="w-4 h-4 mr-1" />
+                                        Save
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
                               </div>
-                              <div>
-                                <Label htmlFor={`role-${member.id}`}>Role</Label>
-                                <Input
-                                  id={`role-${member.id}`}
-                                  value={memberForms[member.id]?.role || ''}
-                                  onChange={(e) => {
-                                    setMemberForms(prev => ({
-                                      ...prev,
-                                      [member.id]: { ...prev[member.id], role: e.target.value }
-                                    }));
-                                    setHasChanges(true);
-                                  }}
-                                  placeholder="Enter role"
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor={`email-${member.id}`}>Email</Label>
-                                <Input
-                                  id={`email-${member.id}`}
-                                  type="email"
-                                  value={memberForms[member.id]?.email || ''}
-                                  onChange={(e) => {
-                                    setMemberForms(prev => ({
-                                      ...prev,
-                                      [member.id]: { ...prev[member.id], email: e.target.value }
-                                    }));
-                                    setHasChanges(true);
-                                  }}
-                                  placeholder="Enter email"
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor={`phone-${member.id}`}>Phone</Label>
-                                <Input
-                                  id={`phone-${member.id}`}
-                                  type="tel"
-                                  value={memberForms[member.id]?.phone || ''}
-                                  onChange={(e) => {
-                                    setMemberForms(prev => ({
-                                      ...prev,
-                                      [member.id]: { ...prev[member.id], phone: e.target.value }
-                                    }));
-                                    setHasChanges(true);
-                                  }}
-                                  placeholder="Enter phone"
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor={`status-${member.id}`}>Status</Label>
-                                <select
-                                  id={`status-${member.id}`}
-                                  value={memberForms[member.id]?.status || 'active'}
-                                  onChange={(e) => {
-                                    setMemberForms(prev => ({
-                                      ...prev,
-                                      [member.id]: { ...prev[member.id], status: e.target.value as 'active' | 'inactive' }
-                                    }));
-                                    setHasChanges(true);
-                                  }}
-                                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                >
-                                  <option value="active">Active</option>
-                                  <option value="inactive">Inactive</option>
-                                </select>
-                              </div>
-                              <div className="flex items-end space-x-2">
-                                <Button
-                                  variant="outline"
-                                  onClick={() => {
-                                    setMemberForms(prev => ({
-                                      ...prev,
-                                      [member.id]: { ...member }
-                                    }));
-                                    setEditingMemberId(null);
-                                    setHasChanges(false);
-                                  }}
-                                  disabled={isSaving}
-                                >
-                                  Cancel
-                                </Button>
-                                <Button
-                                  onClick={() => handleMemberSave(member.id)}
-                                  disabled={isSaving}
-                                  className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
-                                >
-                                  {isSaving ? (
-                                    <>
-                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                      Saving...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Check className="w-4 h-4 mr-2" />
-                                      Save
-                                    </>
-                                  )}
-                                </Button>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <Label htmlFor={`name-${member.id}`}>Name *</Label>
+                                  <Input
+                                    id={`name-${member.id}`}
+                                    value={memberForms[member.id]?.name || ''}
+                                    onChange={(e) => {
+                                      setMemberForms(prev => ({
+                                        ...prev,
+                                        [member.id]: { ...prev[member.id], name: e.target.value }
+                                      }));
+                                      setHasChanges(true);
+                                    }}
+                                    placeholder="Enter full name"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor={`role-${member.id}`}>Role</Label>
+                                  <Input
+                                    id={`role-${member.id}`}
+                                    value={memberForms[member.id]?.role || ''}
+                                    onChange={(e) => {
+                                      setMemberForms(prev => ({
+                                        ...prev,
+                                        [member.id]: { ...prev[member.id], role: e.target.value }
+                                      }));
+                                      setHasChanges(true);
+                                    }}
+                                    placeholder="Enter role/position"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor={`email-${member.id}`}>Email</Label>
+                                  <Input
+                                    id={`email-${member.id}`}
+                                    type="email"
+                                    value={memberForms[member.id]?.email || ''}
+                                    onChange={(e) => {
+                                      setMemberForms(prev => ({
+                                        ...prev,
+                                        [member.id]: { ...prev[member.id], email: e.target.value }
+                                      }));
+                                      setHasChanges(true);
+                                    }}
+                                    placeholder="Enter email address"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor={`phone-${member.id}`}>Phone</Label>
+                                  <Input
+                                    id={`phone-${member.id}`}
+                                    type="tel"
+                                    value={memberForms[member.id]?.phone || ''}
+                                    onChange={(e) => {
+                                      setMemberForms(prev => ({
+                                        ...prev,
+                                        [member.id]: { ...prev[member.id], phone: e.target.value }
+                                      }));
+                                      setHasChanges(true);
+                                    }}
+                                    placeholder="Enter phone number"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor={`status-${member.id}`}>Status</Label>
+                                  <select
+                                    id={`status-${member.id}`}
+                                    value={memberForms[member.id]?.status || 'active'}
+                                    onChange={(e) => {
+                                      setMemberForms(prev => ({
+                                        ...prev,
+                                        [member.id]: { ...prev[member.id], status: e.target.value as 'active' | 'inactive' }
+                                      }));
+                                      setHasChanges(true);
+                                    }}
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                  >
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                  </select>
+                                </div>
                               </div>
                             </div>
                           ) : (
                             <div className="flex items-center justify-between">
                               <div className="flex items-center space-x-4">
-                                <Avatar className="w-10 h-10">
-                                  <AvatarFallback className="bg-gray-200 text-gray-600">
+                                <Avatar className="w-12 h-12">
+                                  <AvatarFallback className="bg-custom-dark-maroon text-white">
                                     {getInitials(member.name)}
                                   </AvatarFallback>
                                 </Avatar>
                                 <div>
-                                  <h4 className="font-medium text-gray-900">{member.name}</h4>
-                                  <p className="text-sm text-gray-600">{member.role}</p>
-                                  <div className="flex items-center space-x-4 mt-1">
+                                  <h4 className="font-semibold text-gray-900 text-lg">{member.name}</h4>
+                                  <p className="text-gray-600">{member.role}</p>
+                                  <div className="flex items-center space-x-4 mt-2">
                                     {member.email && (
-                                      <span className="text-xs text-gray-500">{member.email}</span>
+                                      <div className="flex items-center space-x-1">
+                                        <Mail className="w-4 h-4 text-gray-400" />
+                                        <span className="text-sm text-gray-500">{member.email}</span>
+                                      </div>
                                     )}
                                     {member.phone && (
-                                      <span className="text-xs text-gray-500">{member.phone}</span>
+                                      <div className="flex items-center space-x-1">
+                                        <Phone className="w-4 h-4 text-gray-400" />
+                                        <span className="text-sm text-gray-500">{member.phone}</span>
+                                      </div>
                                     )}
-                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(member.status)}`}>
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(member.status)}`}>
                                       {member.status}
                                     </span>
                                   </div>
@@ -1025,14 +1043,14 @@ export const Dashboard = () => {
                                   size="sm"
                                   onClick={() => setEditingMemberId(member.id)}
                                 >
-                                  <Edit className="w-4 h-4" />
+                                  <Edit className="w-4 h-4 mr-1" />
                                   Edit
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => handleRemoveTeamMember(member.id)}
-                                  className="text-red-600 hover:text-red-800"
+                                  className="text-red-600 hover:text-red-800 hover:bg-red-50"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
@@ -1042,21 +1060,21 @@ export const Dashboard = () => {
                         </div>
                       ))}
 
-                      {/* Legacy Team Members */}
+                      {/* Legacy Team Members (Read-only) */}
                       {members.map((member) => (
-                        <div key={member.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
+                        <div key={member.id} className="flex items-center justify-between p-6 bg-blue-50 rounded-lg border border-blue-200">
                           <div className="flex items-center space-x-4">
-                            <Avatar className="w-10 h-10">
-                              <AvatarFallback className="bg-gray-200 text-gray-600">
+                            <Avatar className="w-12 h-12">
+                              <AvatarFallback className="bg-blue-600 text-white">
                                 {getInitials(member.name)}
                               </AvatarFallback>
                             </Avatar>
                             <div>
-                              <h4 className="font-medium text-gray-900">{member.name}</h4>
-                              <p className="text-sm text-gray-600">{member.email}</p>
+                              <h4 className="font-semibold text-gray-900 text-lg">{member.name}</h4>
+                              <p className="text-gray-600">{member.email}</p>
                               {member.phone && <p className="text-sm text-gray-600">{member.phone}</p>}
                               {member.address && <p className="text-sm text-gray-600">{member.address}</p>}
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-600 mt-1">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mt-2">
                                 Legacy Member
                               </span>
                             </div>
@@ -1065,7 +1083,7 @@ export const Dashboard = () => {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleRemoveMember(member.id)}
-                            className="text-red-600 hover:text-red-800"
+                            className="text-red-600 hover:text-red-800 hover:bg-red-50"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
