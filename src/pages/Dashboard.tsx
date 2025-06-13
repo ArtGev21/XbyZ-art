@@ -177,14 +177,18 @@ export const Dashboard = () => {
     if (!user) return;
 
     try {
-      // First check if profile exists
-      let { data: profile, error } = await supabase
+      // Check if profile exists using limit(1) to avoid PGRST116 error
+      const { data: profiles, error } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .limit(1);
 
-      if (error && error.code === 'PGRST116') {
+      if (error) throw error;
+
+      let profile;
+      
+      if (profiles.length === 0) {
         // Profile doesn't exist, create one
         const newProfile = {
           id: user.id,
@@ -203,8 +207,8 @@ export const Dashboard = () => {
 
         if (createError) throw createError;
         profile = createdProfile;
-      } else if (error) {
-        throw error;
+      } else {
+        profile = profiles[0];
       }
 
       setUserProfile(profile);
