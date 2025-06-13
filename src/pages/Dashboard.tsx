@@ -51,6 +51,7 @@ interface TeamMember {
   role: string;
   email: string;
   phone: string;
+  position: string | null;
   status: 'active' | 'inactive';
   created_at: string;
   updated_at: string;
@@ -71,6 +72,7 @@ interface BusinessProfile {
   tax_id?: string;
   description?: string;
   status: string;
+  owner_phone?: string;
   created_at: string;
   updated_at: string;
 }
@@ -267,7 +269,7 @@ export const Dashboard = () => {
     try {
       const { data: profiles, error } = await supabase
         .from('business_profiles')
-        .select('id,user_id,business_name,business_type,address_line1,address_line2,city,state,zip_code,phone,email,tax_id,description,status,created_at,updated_at')
+        .select('id,user_id,business_name,business_type,address_line1,address_line2,city,state,zip_code,phone,email,tax_id,description,status,owner_phone,created_at,updated_at')
         .eq('user_id', user.id)
         .limit(1);
 
@@ -294,7 +296,7 @@ export const Dashboard = () => {
     try {
       const { data, error } = await supabase
         .from('team_members')
-        .select('id,user_id,name,role,email,phone,status,created_at,updated_at')
+        .select('id,user_id,name,role,email,phone,position,status,created_at,updated_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -368,6 +370,7 @@ export const Dashboard = () => {
           role: memberData.role,
           email: memberData.email,
           phone: memberData.phone,
+          position: memberData.position,
           status: memberData.status,
           updated_at: new Date().toISOString()
         })
@@ -402,6 +405,7 @@ export const Dashboard = () => {
       role: 'Team Member',
       email: '',
       phone: '',
+      position: 'Team Member',
       status: 'active' as const
     };
 
@@ -409,7 +413,7 @@ export const Dashboard = () => {
       const { data, error } = await supabase
         .from('team_members')
         .insert([newMember])
-        .select('id,user_id,name,role,email,phone,status,created_at,updated_at')
+        .select('id,user_id,name,role,email,phone,position,status,created_at,updated_at')
         .single();
 
       if (error) throw error;
@@ -473,6 +477,7 @@ export const Dashboard = () => {
           phone: businessForm.phone,
           email: businessForm.email,
           description: businessForm.description,
+          owner_phone: businessForm.owner_phone,
           updated_at: new Date().toISOString()
         })
         .eq('id', businessProfile.id);
@@ -700,11 +705,20 @@ export const Dashboard = () => {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="phone">Phone</Label>
+                          <Label htmlFor="phone">Business Phone</Label>
                           <Input
                             id="phone"
                             value={businessForm.phone || ''}
                             onChange={(e) => setBusinessForm(prev => ({ ...prev, phone: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="owner_phone">Owner Phone</Label>
+                          <Input
+                            id="owner_phone"
+                            value={businessForm.owner_phone || ''}
+                            onChange={(e) => setBusinessForm(prev => ({ ...prev, owner_phone: e.target.value }))}
+                            placeholder="Business owner's phone number"
                           />
                         </div>
                         <div>
@@ -770,7 +784,10 @@ export const Dashboard = () => {
                           <div>
                             <Label className="text-sm font-medium text-gray-500">Contact Information</Label>
                             <p className="text-gray-900">
-                              Phone: {businessProfile.phone}<br />
+                              Business: {businessProfile.phone}<br />
+                              {businessProfile.owner_phone && (
+                                <>Owner: {businessProfile.owner_phone}<br /></>
+                              )}
                               Email: {businessProfile.email}
                             </p>
                           </div>
@@ -1024,6 +1041,21 @@ export const Dashboard = () => {
                                   />
                                 </div>
                                 <div>
+                                  <Label htmlFor={`position-${member.id}`}>Position in Business</Label>
+                                  <Input
+                                    id={`position-${member.id}`}
+                                    value={memberForms[member.id]?.position || ''}
+                                    onChange={(e) => {
+                                      setMemberForms(prev => ({
+                                        ...prev,
+                                        [member.id]: { ...prev[member.id], position: e.target.value }
+                                      }));
+                                      setHasChanges(true);
+                                    }}
+                                    placeholder="Enter business position"
+                                  />
+                                </div>
+                                <div>
                                   <Label htmlFor={`email-${member.id}`}>Email</Label>
                                   <Input
                                     id={`email-${member.id}`}
@@ -1086,6 +1118,9 @@ export const Dashboard = () => {
                                 <div>
                                   <h4 className="font-semibold text-gray-900 text-lg">{member.name}</h4>
                                   <p className="text-gray-600">{member.role}</p>
+                                  {member.position && (
+                                    <p className="text-sm text-gray-500">Position: {member.position}</p>
+                                  )}
                                   <div className="flex items-center space-x-4 mt-2">
                                     {member.email && (
                                       <div className="flex items-center space-x-1">

@@ -25,6 +25,7 @@ export type Database = {
           tax_id: string | null
           description: string | null
           status: 'draft' | 'submitted' | 'in_review' | 'approved' | 'rejected'
+          owner_phone: string | null
           created_at: string
           updated_at: string
         }
@@ -43,6 +44,7 @@ export type Database = {
           tax_id?: string | null
           description?: string | null
           status?: 'draft' | 'submitted' | 'in_review' | 'approved' | 'rejected'
+          owner_phone?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -61,6 +63,7 @@ export type Database = {
           tax_id?: string | null
           description?: string | null
           status?: 'draft' | 'submitted' | 'in_review' | 'approved' | 'rejected'
+          owner_phone?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -249,6 +252,7 @@ export type Database = {
           role: string
           email: string
           phone: string
+          position: string | null
           status: 'active' | 'inactive'
           created_at: string
           updated_at: string
@@ -260,6 +264,7 @@ export type Database = {
           role?: string
           email?: string
           phone?: string
+          position?: string | null
           status?: 'active' | 'inactive'
           created_at?: string
           updated_at?: string
@@ -271,6 +276,7 @@ export type Database = {
           role?: string
           email?: string
           phone?: string
+          position?: string | null
           status?: 'active' | 'inactive'
           created_at?: string
           updated_at?: string
@@ -343,7 +349,7 @@ export type TablesInsert<
     ? I
     : never
   : PublicTableNameOrOptions extends keyof Database["public"]["Tables"]
-  ? Database["public"]["Tables"][PublicTableNameOrOptions] extends {
+  ? Database["public"]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I

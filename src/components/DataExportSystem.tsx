@@ -31,9 +31,9 @@ export const DataExportSystem = () => {
     try {
       // Fetch all data from Supabase tables
       const [businessProfilesResult, userProfilesResult, teamMembersResult] = await Promise.all([
-        supabase.from('business_profiles').select('id,user_id,business_name,business_type,address_line1,address_line2,city,state,zip_code,phone,email,tax_id,description,status,created_at,updated_at').order('created_at', { ascending: false }),
+        supabase.from('business_profiles').select('id,user_id,business_name,business_type,address_line1,address_line2,city,state,zip_code,phone,email,tax_id,description,status,owner_phone,created_at,updated_at').order('created_at', { ascending: false }),
         supabase.from('user_profiles').select('id,full_name,email,phone,role,profile_picture_url,created_at,updated_at').order('created_at', { ascending: false }),
-        supabase.from('team_members').select('id,user_id,name,role,email,phone,status,created_at,updated_at').order('created_at', { ascending: false })
+        supabase.from('team_members').select('id,user_id,name,role,email,phone,position,status,created_at,updated_at').order('created_at', { ascending: false })
       ]);
 
       if (businessProfilesResult.error) throw businessProfilesResult.error;
@@ -202,13 +202,13 @@ export const DataExportSystem = () => {
       
       switch (tableName) {
         case 'business_profiles':
-          selectColumns = 'id,user_id,business_name,business_type,address_line1,address_line2,city,state,zip_code,phone,email,tax_id,description,status,created_at,updated_at';
+          selectColumns = 'id,user_id,business_name,business_type,address_line1,address_line2,city,state,zip_code,phone,email,tax_id,description,status,owner_phone,created_at,updated_at';
           break;
         case 'user_profiles':
           selectColumns = 'id,full_name,email,phone,role,profile_picture_url,created_at,updated_at';
           break;
         case 'team_members':
-          selectColumns = 'id,user_id,name,role,email,phone,status,created_at,updated_at';
+          selectColumns = 'id,user_id,name,role,email,phone,position,status,created_at,updated_at';
           break;
       }
 

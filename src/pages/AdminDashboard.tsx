@@ -53,6 +53,7 @@ interface BusinessProfile {
   tax_id?: string;
   description?: string;
   status: string;
+  owner_phone?: string;
   created_at: string;
   updated_at: string;
 }
@@ -73,6 +74,7 @@ interface TeamMember {
   role: string;
   email: string;
   phone: string;
+  position: string | null;
   status: 'active' | 'inactive';
   created_at: string;
 }
@@ -160,7 +162,7 @@ export const AdminDashboard = () => {
       // First, get all business profiles
       const { data: businessProfiles, error: businessError } = await supabase
         .from('business_profiles')
-        .select('id,user_id,business_name,business_type,address_line1,address_line2,city,state,zip_code,phone,email,tax_id,description,status,created_at,updated_at')
+        .select('id,user_id,business_name,business_type,address_line1,address_line2,city,state,zip_code,phone,email,tax_id,description,status,owner_phone,created_at,updated_at')
         .order('created_at', { ascending: false });
 
       if (businessError) throw businessError;
@@ -189,7 +191,7 @@ export const AdminDashboard = () => {
       // Fetch team members for these user IDs
       const { data: teamMembers, error: teamError } = await supabase
         .from('team_members')
-        .select('id,user_id,name,role,email,phone,status,created_at')
+        .select('id,user_id,name,role,email,phone,position,status,created_at')
         .in('user_id', userIds);
 
       if (teamError) console.error('Error loading team members:', teamError);
@@ -247,11 +249,13 @@ export const AdminDashboard = () => {
           bp.zip_code.includes(searchTerm) ||
           (bp.description && bp.description.toLowerCase().includes(searchLower)) ||
           (bp.tax_id && bp.tax_id.includes(searchTerm)) ||
+          (bp.owner_phone && bp.owner_phone.includes(searchTerm)) ||
           (up && up.full_name.toLowerCase().includes(searchLower)) ||
           (up && up.email.toLowerCase().includes(searchLower)) ||
           app.teamMembers.some(tm => 
             tm.name.toLowerCase().includes(searchLower) ||
-            tm.email.toLowerCase().includes(searchLower)
+            tm.email.toLowerCase().includes(searchLower) ||
+            (tm.position && tm.position.toLowerCase().includes(searchLower))
           )
         );
       });
@@ -763,6 +767,17 @@ export const AdminDashboard = () => {
                                   <span>{application.businessProfile.email}</span>
                                 </div>
                                 
+                                {/* Phone Info */}
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <Phone className="w-4 h-4 mr-2" />
+                                  <span>
+                                    {application.businessProfile.phone}
+                                    {application.businessProfile.owner_phone && 
+                                      ` • Owner: ${application.businessProfile.owner_phone}`
+                                    }
+                                  </span>
+                                </div>
+                                
                                 {/* Location */}
                                 <div className="flex items-center text-sm text-gray-600">
                                   <MapPin className="w-4 h-4 mr-2" />
@@ -859,9 +874,15 @@ export const AdminDashboard = () => {
                                   <p className="text-gray-900">{selectedApplication.businessProfile.email}</p>
                                 </div>
                                 <div>
-                                  <Label className="text-sm font-medium text-gray-500">Phone</Label>
+                                  <Label className="text-sm font-medium text-gray-500">Business Phone</Label>
                                   <p className="text-gray-900">{selectedApplication.businessProfile.phone}</p>
                                 </div>
+                                {selectedApplication.businessProfile.owner_phone && (
+                                  <div>
+                                    <Label className="text-sm font-medium text-gray-500">Owner Phone</Label>
+                                    <p className="text-gray-900">{selectedApplication.businessProfile.owner_phone}</p>
+                                  </div>
+                                )}
                                 <div className="md:col-span-2">
                                   <Label className="text-sm font-medium text-gray-500">Address</Label>
                                   <p className="text-gray-900">
@@ -946,6 +967,9 @@ export const AdminDashboard = () => {
                                         <div>
                                           <h4 className="font-medium text-gray-900">{member.name}</h4>
                                           <p className="text-sm text-gray-600">{member.role}</p>
+                                          {member.position && (
+                                            <p className="text-sm text-gray-500">Position: {member.position}</p>
+                                          )}
                                           {member.email && (
                                             <p className="text-sm text-gray-500">{member.email}</p>
                                           )}
