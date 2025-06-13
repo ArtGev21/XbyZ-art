@@ -138,15 +138,7 @@ export const AdminDashboard = () => {
     const subscription = supabase
       .channel('admin_applications')
       .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'business_profiles' },
-        () => loadApplications()
-      )
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'user_profiles' },
-        () => loadApplications()
-      )
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'team_members' },
+        { event: '*', schema: 'public', table: 'applications' },
         () => loadApplications()
       )
       .subscribe();
@@ -160,14 +152,14 @@ export const AdminDashboard = () => {
     setIsLoadingApplications(true);
     try {
       // First, get all business profiles
-      const { data: businessProfiles, error: businessError } = await supabase
+      const { data: applications, error: applicationsError } = await supabase
         .from('business_profiles')
         .select('id,user_id,business_name,business_type,address_line1,address_line2,city,state,zip_code,phone,email,tax_id,description,status,owner_phone,created_at,updated_at')
         .order('created_at', { ascending: false });
 
-      if (businessError) throw businessError;
+      if (applicationsError) throw applicationsError;
 
-      if (!businessProfiles || businessProfiles.length === 0) {
+      if (!applications || applications.length === 0) {
         setApplications([]);
         setFilteredApplications([]);
         toast({
@@ -178,7 +170,7 @@ export const AdminDashboard = () => {
       }
 
       // Get unique user IDs from business profiles
-      const userIds = [...new Set(businessProfiles.map(bp => bp.user_id))];
+      const userIds = [...new Set(applications.map(bp => bp.user_id))];
 
       // Fetch user profiles for these user IDs
       const { data: userProfiles, error: userError } = await supabase
@@ -197,7 +189,7 @@ export const AdminDashboard = () => {
       if (teamError) console.error('Error loading team members:', teamError);
 
       // Combine the data
-      const applicationsData: ApplicationData[] = businessProfiles.map(businessProfile => {
+      const applicationsData: ApplicationData[] = applications.map(businessProfile => {
         const userProfile = userProfiles?.find(up => up.id === businessProfile.user_id) || null;
         const userTeamMembers = teamMembers?.filter(tm => tm.user_id === businessProfile.user_id) || [];
 
