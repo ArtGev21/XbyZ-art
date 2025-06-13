@@ -11,6 +11,8 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
+import { BusinessFormationForm } from '@/components/BusinessFormationForm';
+import { PricingPackages } from '@/components/PricingPackages';
 import { 
   Building2, 
   User, 
@@ -27,7 +29,8 @@ import {
   Check,
   Loader2,
   MapPin,
-  Plus
+  Plus,
+  FileCheck
 } from 'lucide-react';
 
 interface UserProfile {
@@ -49,6 +52,25 @@ interface TeamMember {
   email: string;
   phone: string;
   status: 'active' | 'inactive';
+  created_at: string;
+  updated_at: string;
+}
+
+interface BusinessProfile {
+  id: string;
+  user_id: string;
+  business_name: string;
+  business_type: string;
+  address_line1: string;
+  address_line2?: string;
+  city: string;
+  state: string;
+  zip_code: string;
+  phone: string;
+  email: string;
+  tax_id?: string;
+  description?: string;
+  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -86,6 +108,7 @@ export const Dashboard = () => {
   
   // Profile state
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [activeSection, setActiveSection] = useState('business');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -96,13 +119,13 @@ export const Dashboard = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   
-  // Legacy dashboard state
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  // Business form state
   const [isEditingBusiness, setIsEditingBusiness] = useState(false);
-  const [isEditingPersonal, setIsEditingPersonal] = useState(false);
   const [businessForm, setBusinessForm] = useState<any>({});
-  const [personalForm, setPersonalForm] = useState<any>({});
-  const [members, setMembers] = useState<any[]>([]);
+  
+  // Form modal state
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isPricingOpen, setIsPricingOpen] = useState(false);
 
   // Mock documents for demonstration
   const [documents] = useState<Document[]>([
@@ -140,8 +163,8 @@ export const Dashboard = () => {
     }
 
     loadUserProfile();
+    loadBusinessProfile();
     loadTeamMembers();
-    loadLegacyDashboardData();
     
     // Set up real-time subscriptions
     const profileSubscription = supabase
@@ -152,6 +175,19 @@ export const Dashboard = () => {
           console.log('Profile updated:', payload);
           if (payload.eventType === 'UPDATE') {
             setUserProfile(payload.new as UserProfile);
+          }
+        }
+      )
+      .subscribe();
+
+    const businessSubscription = supabase
+      .channel('business_profiles_changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'business_profiles', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          console.log('Business profile updated:', payload);
+          if (payload.eventType === 'UPDATE') {
+            setBusinessProfile(payload.new as BusinessProfile);
           }
         }
       )
@@ -170,6 +206,7 @@ export const Dashboard = () => {
 
     return () => {
       profileSubscription.unsubscribe();
+      businessSubscription.unsubscribe();
       teamSubscription.unsubscribe();
     };
   }, [user, navigate]);
@@ -224,6 +261,33 @@ export const Dashboard = () => {
     }
   };
 
+  const loadBusinessProfile = async () => {
+    if (!user) return;
+
+    try {
+      const { data: profiles, error } = await supabase
+        .from('business_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .limit(1);
+
+      if (error) throw error;
+
+      if (profiles.length > 0) {
+        const profile = profiles[0];
+        setBusinessProfile(profile);
+        setBusinessForm(profile);
+      }
+    } catch (error) {
+      console.error('Error loading business profile:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load business profile.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const loadTeamMembers = async () => {
     if (!user) return;
 
@@ -252,22 +316,6 @@ export const Dashboard = () => {
         description: "Failed to load team members.",
         variant: "destructive",
       });
-    }
-  };
-
-  const loadLegacyDashboardData = () => {
-    // Load legacy dashboard data from localStorage
-    const storedData = localStorage.getItem('dashboardData');
-    if (storedData) {
-      try {
-        const data = JSON.parse(storedData);
-        setDashboardData(data);
-        setBusinessForm(data.businessProfile);
-        setPersonalForm(data.ownerInfo);
-        setMembers(data.members || []);
-      } catch (error) {
-        console.error('Error parsing dashboard data:', error);
-      }
     }
   };
 
@@ -410,7 +458,7 @@ export const Dashboard = () => {
   };
 
   const handleBusinessSave = async () => {
-    if (!dashboardData?.businessProfile?.id) return;
+    if (!businessProfile?.id) return;
 
     setIsLoading(true);
     try {
@@ -427,15 +475,11 @@ export const Dashboard = () => {
           description: businessForm.description,
           updated_at: new Date().toISOString()
         })
-        .eq('id', dashboardData.businessProfile.id);
+        .eq('id', businessProfile.id);
 
       if (error) throw error;
 
-      setDashboardData(prev => prev ? {
-        ...prev,
-        businessProfile: { ...prev.businessProfile, ...businessForm }
-      } : null);
-
+      setBusinessProfile(prev => prev ? { ...prev, ...businessForm } : null);
       setIsEditingBusiness(false);
       toast({
         title: "Success",
@@ -453,36 +497,9 @@ export const Dashboard = () => {
     }
   };
 
-  const handlePersonalSave = () => {
-    const updatedData = {
-      ...dashboardData,
-      ownerInfo: personalForm
-    };
-    localStorage.setItem('dashboardData', JSON.stringify(updatedData));
-    setDashboardData(updatedData as DashboardData);
-    setIsEditingPersonal(false);
-    
-    toast({
-      title: "Success",
-      description: "Personal information updated successfully!",
-    });
-  };
-
-  const handleRemoveMember = (memberId: string) => {
-    const updatedMembers = members.filter(member => member.id !== memberId);
-    setMembers(updatedMembers);
-    
-    const updatedData = {
-      ...dashboardData,
-      members: updatedMembers
-    };
-    localStorage.setItem('dashboardData', JSON.stringify(updatedData));
-    setDashboardData(updatedData as DashboardData);
-    
-    toast({
-      title: "Success",
-      description: "Team member removed successfully!",
-    });
+  const handleFormSubmitted = () => {
+    setIsFormOpen(false);
+    setIsPricingOpen(true);
   };
 
   const getStatusColor = (status: string) => {
@@ -505,7 +522,7 @@ export const Dashboard = () => {
       .slice(0, 2);
   };
 
-  if (!userProfile || !dashboardData) {
+  if (!userProfile) {
     return (
       <div className="min-h-screen bg-white">
         <Header />
@@ -530,7 +547,15 @@ export const Dashboard = () => {
         <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col">
           {/* User Profile Section */}
           <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center space-x-4 mb-4">
+            <div className="text-center mb-4">
+              <h1 className="text-xl font-bold text-gray-900 mb-1">
+                Welcome to your dashboard,
+              </h1>
+              <p className="text-lg text-custom-dark-maroon font-semibold">
+                {userProfile.full_name}!
+              </p>
+            </div>
+            <div className="flex items-center space-x-4">
               <Avatar className="w-16 h-16">
                 <AvatarImage src={userProfile.profile_picture_url} alt={userProfile.full_name} />
                 <AvatarFallback className="bg-custom-dark-maroon text-white text-lg">
@@ -538,8 +563,9 @@ export const Dashboard = () => {
                 </AvatarFallback>
               </Avatar>
               <div>
-                <h2 className="text-xl font-bold text-gray-900">{userProfile.full_name}</h2>
+                <h2 className="text-lg font-semibold text-gray-900">{userProfile.full_name}</h2>
                 <p className="text-sm text-gray-500">{userProfile.email}</p>
+                <p className="text-xs text-gray-400">{userProfile.role}</p>
               </div>
             </div>
           </div>
@@ -584,6 +610,17 @@ export const Dashboard = () => {
               </button>
             </div>
           </nav>
+
+          {/* Submit Another Form Button */}
+          <div className="p-4 border-t border-gray-200">
+            <Button
+              onClick={() => setIsFormOpen(true)}
+              className="w-full bg-custom-dark-maroon hover:bg-custom-deep-maroon text-white"
+            >
+              <FileCheck className="w-4 h-4 mr-2" />
+              Submit Another Form
+            </Button>
+          </div>
         </div>
 
         {/* Main Content Area */}
@@ -596,163 +633,182 @@ export const Dashboard = () => {
                 <p className="text-gray-600">Manage your business details and settings</p>
               </div>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>Business Details</CardTitle>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      if (isEditingBusiness) {
-                        setBusinessForm(dashboardData.businessProfile);
-                      }
-                      setIsEditingBusiness(!isEditingBusiness);
-                    }}
-                  >
-                    {isEditingBusiness ? <X className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
-                    {isEditingBusiness ? 'Cancel' : 'Edit'}
-                  </Button>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {isEditingBusiness ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <Label htmlFor="business_name">Business Name</Label>
-                        <Input
-                          id="business_name"
-                          value={businessForm.business_name || ''}
-                          onChange={(e) => setBusinessForm(prev => ({ ...prev, business_name: e.target.value }))}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="business_type">Business Type</Label>
-                        <Input
-                          id="business_type"
-                          value={businessForm.business_type || ''}
-                          disabled
-                          className="bg-gray-100"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="address_line1">Address Line 1</Label>
-                        <Input
-                          id="address_line1"
-                          value={businessForm.address_line1 || ''}
-                          onChange={(e) => setBusinessForm(prev => ({ ...prev, address_line1: e.target.value }))}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="address_line2">Address Line 2</Label>
-                        <Input
-                          id="address_line2"
-                          value={businessForm.address_line2 || ''}
-                          onChange={(e) => setBusinessForm(prev => ({ ...prev, address_line2: e.target.value }))}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="city">City</Label>
-                        <Input
-                          id="city"
-                          value={businessForm.city || ''}
-                          onChange={(e) => setBusinessForm(prev => ({ ...prev, city: e.target.value }))}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="zip_code">ZIP Code</Label>
-                        <Input
-                          id="zip_code"
-                          value={businessForm.zip_code || ''}
-                          onChange={(e) => setBusinessForm(prev => ({ ...prev, zip_code: e.target.value }))}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="phone">Phone</Label>
-                        <Input
-                          id="phone"
-                          value={businessForm.phone || ''}
-                          onChange={(e) => setBusinessForm(prev => ({ ...prev, phone: e.target.value }))}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          value={businessForm.email || ''}
-                          onChange={(e) => setBusinessForm(prev => ({ ...prev, email: e.target.value }))}
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label htmlFor="description">Description</Label>
-                        <Textarea
-                          id="description"
-                          value={businessForm.description || ''}
-                          onChange={(e) => setBusinessForm(prev => ({ ...prev, description: e.target.value }))}
-                          rows={3}
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <Button 
-                          onClick={handleBusinessSave} 
-                          disabled={isLoading}
-                          className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
-                        >
-                          <Save className="w-4 h-4 mr-2" />
-                          {isLoading ? 'Saving...' : 'Save Changes'}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="flex items-center space-x-3">
-                        <Building2 className="w-5 h-5 text-gray-400" />
+              {businessProfile ? (
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle>Business Details</CardTitle>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (isEditingBusiness) {
+                          setBusinessForm(businessProfile);
+                        }
+                        setIsEditingBusiness(!isEditingBusiness);
+                      }}
+                    >
+                      {isEditingBusiness ? <X className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
+                      {isEditingBusiness ? 'Cancel' : 'Edit'}
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {isEditingBusiness ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                          <Label className="text-sm font-medium text-gray-500">Business Name</Label>
-                          <p className="text-gray-900">{dashboardData.businessProfile.business_name}</p>
+                          <Label htmlFor="business_name">Business Name</Label>
+                          <Input
+                            id="business_name"
+                            value={businessForm.business_name || ''}
+                            onChange={(e) => setBusinessForm(prev => ({ ...prev, business_name: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="business_type">Business Type</Label>
+                          <Input
+                            id="business_type"
+                            value={businessForm.business_type || ''}
+                            disabled
+                            className="bg-gray-100"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="address_line1">Address Line 1</Label>
+                          <Input
+                            id="address_line1"
+                            value={businessForm.address_line1 || ''}
+                            onChange={(e) => setBusinessForm(prev => ({ ...prev, address_line1: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="address_line2">Address Line 2</Label>
+                          <Input
+                            id="address_line2"
+                            value={businessForm.address_line2 || ''}
+                            onChange={(e) => setBusinessForm(prev => ({ ...prev, address_line2: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="city">City</Label>
+                          <Input
+                            id="city"
+                            value={businessForm.city || ''}
+                            onChange={(e) => setBusinessForm(prev => ({ ...prev, city: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="zip_code">ZIP Code</Label>
+                          <Input
+                            id="zip_code"
+                            value={businessForm.zip_code || ''}
+                            onChange={(e) => setBusinessForm(prev => ({ ...prev, zip_code: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="phone">Phone</Label>
+                          <Input
+                            id="phone"
+                            value={businessForm.phone || ''}
+                            onChange={(e) => setBusinessForm(prev => ({ ...prev, phone: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="email">Email</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            value={businessForm.email || ''}
+                            onChange={(e) => setBusinessForm(prev => ({ ...prev, email: e.target.value }))}
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <Label htmlFor="description">Description</Label>
+                          <Textarea
+                            id="description"
+                            value={businessForm.description || ''}
+                            onChange={(e) => setBusinessForm(prev => ({ ...prev, description: e.target.value }))}
+                            rows={3}
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <Button 
+                            onClick={handleBusinessSave} 
+                            disabled={isLoading}
+                            className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
+                          >
+                            <Save className="w-4 h-4 mr-2" />
+                            {isLoading ? 'Saving...' : 'Save Changes'}
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-3">
-                        <Briefcase className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <Label className="text-sm font-medium text-gray-500">Business Type</Label>
-                          <p className="text-gray-900 capitalize">{dashboardData.businessProfile.business_type?.replace('_', ' ')}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start space-x-3">
-                        <MapPin className="w-5 h-5 text-gray-400 mt-1" />
-                        <div>
-                          <Label className="text-sm font-medium text-gray-500">Address</Label>
-                          <p className="text-gray-900">
-                            {dashboardData.businessProfile.address_line1}
-                            {dashboardData.businessProfile.address_line2 && <br />}
-                            {dashboardData.businessProfile.address_line2}
-                            <br />
-                            {dashboardData.businessProfile.city}, {dashboardData.businessProfile.state} {dashboardData.businessProfile.zip_code}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-start space-x-3">
-                        <Phone className="w-5 h-5 text-gray-400 mt-1" />
-                        <div>
-                          <Label className="text-sm font-medium text-gray-500">Contact Information</Label>
-                          <p className="text-gray-900">
-                            Phone: {dashboardData.businessProfile.phone}<br />
-                            Email: {dashboardData.businessProfile.email}
-                          </p>
-                        </div>
-                      </div>
-                      {dashboardData.businessProfile.description && (
-                        <div className="md:col-span-2 flex items-start space-x-3">
-                          <FileText className="w-5 h-5 text-gray-400 mt-1" />
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="flex items-center space-x-3">
+                          <Building2 className="w-5 h-5 text-gray-400" />
                           <div>
-                            <Label className="text-sm font-medium text-gray-500">Description</Label>
-                            <p className="text-gray-900">{dashboardData.businessProfile.description}</p>
+                            <Label className="text-sm font-medium text-gray-500">Business Name</Label>
+                            <p className="text-gray-900">{businessProfile.business_name}</p>
                           </div>
                         </div>
-                      )}
+                        <div className="flex items-center space-x-3">
+                          <Briefcase className="w-5 h-5 text-gray-400" />
+                          <div>
+                            <Label className="text-sm font-medium text-gray-500">Business Type</Label>
+                            <p className="text-gray-900 capitalize">{businessProfile.business_type?.replace('_', ' ')}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                          <MapPin className="w-5 h-5 text-gray-400 mt-1" />
+                          <div>
+                            <Label className="text-sm font-medium text-gray-500">Address</Label>
+                            <p className="text-gray-900">
+                              {businessProfile.address_line1}
+                              {businessProfile.address_line2 && <br />}
+                              {businessProfile.address_line2}
+                              <br />
+                              {businessProfile.city}, {businessProfile.state} {businessProfile.zip_code}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                          <Phone className="w-5 h-5 text-gray-400 mt-1" />
+                          <div>
+                            <Label className="text-sm font-medium text-gray-500">Contact Information</Label>
+                            <p className="text-gray-900">
+                              Phone: {businessProfile.phone}<br />
+                              Email: {businessProfile.email}
+                            </p>
+                          </div>
+                        </div>
+                        {businessProfile.description && (
+                          <div className="md:col-span-2 flex items-start space-x-3">
+                            <FileText className="w-5 h-5 text-gray-400 mt-1" />
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">Description</Label>
+                              <p className="text-gray-900">{businessProfile.description}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="flex items-center justify-center h-64">
+                    <div className="text-center">
+                      <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No Business Information</h3>
+                      <p className="text-gray-600 mb-4">You haven't submitted any business information yet.</p>
+                      <Button
+                        onClick={() => setIsFormOpen(true)}
+                        className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
+                      >
+                        <FileCheck className="w-4 h-4 mr-2" />
+                        Submit Business Form
+                      </Button>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
 
@@ -764,59 +820,68 @@ export const Dashboard = () => {
                 <p className="text-gray-600">Manage your personal details and team members</p>
               </div>
 
-              {/* Owner Information */}
+              {/* User Profile Information */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>Owner Information</CardTitle>
+                  <CardTitle>Your Profile</CardTitle>
                   <Button
                     variant="outline"
                     onClick={() => {
-                      if (isEditingPersonal) {
-                        setPersonalForm(dashboardData.ownerInfo);
+                      if (isEditingProfile) {
+                        setProfileForm(userProfile);
                       }
-                      setIsEditingPersonal(!isEditingPersonal);
+                      setIsEditingProfile(!isEditingProfile);
                     }}
                   >
-                    {isEditingPersonal ? <X className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
-                    {isEditingPersonal ? 'Cancel' : 'Edit'}
+                    {isEditingProfile ? <X className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
+                    {isEditingProfile ? 'Cancel' : 'Edit'}
                   </Button>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {isEditingPersonal ? (
+                  {isEditingProfile ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="owner_name">Full Name</Label>
+                        <Label htmlFor="full_name">Full Name</Label>
                         <Input
-                          id="owner_name"
-                          value={personalForm.name || ''}
-                          onChange={(e) => setPersonalForm(prev => ({ ...prev, name: e.target.value }))}
+                          id="full_name"
+                          value={profileForm.full_name || ''}
+                          onChange={(e) => setProfileForm(prev => ({ ...prev, full_name: e.target.value }))}
                         />
                       </div>
                       <div>
-                        <Label htmlFor="owner_email">Email</Label>
+                        <Label htmlFor="email">Email</Label>
                         <Input
-                          id="owner_email"
+                          id="email"
                           type="email"
-                          value={personalForm.email || ''}
-                          onChange={(e) => setPersonalForm(prev => ({ ...prev, email: e.target.value }))}
+                          value={profileForm.email || ''}
+                          onChange={(e) => setProfileForm(prev => ({ ...prev, email: e.target.value }))}
                         />
                       </div>
-                      <div className="md:col-span-2">
-                        <Label htmlFor="owner_address">Address</Label>
-                        <Textarea
-                          id="owner_address"
-                          value={personalForm.address || ''}
-                          onChange={(e) => setPersonalForm(prev => ({ ...prev, address: e.target.value }))}
-                          rows={2}
+                      <div>
+                        <Label htmlFor="phone">Phone</Label>
+                        <Input
+                          id="phone"
+                          type="tel"
+                          value={profileForm.phone || ''}
+                          onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="role">Role</Label>
+                        <Input
+                          id="role"
+                          value={profileForm.role || ''}
+                          onChange={(e) => setProfileForm(prev => ({ ...prev, role: e.target.value }))}
                         />
                       </div>
                       <div className="md:col-span-2">
                         <Button 
-                          onClick={handlePersonalSave}
+                          onClick={handleProfileSave}
+                          disabled={isSaving}
                           className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
                         >
                           <Save className="w-4 h-4 mr-2" />
-                          Save Changes
+                          {isSaving ? 'Saving...' : 'Save Changes'}
                         </Button>
                       </div>
                     </div>
@@ -826,21 +891,28 @@ export const Dashboard = () => {
                         <User className="w-5 h-5 text-gray-400" />
                         <div>
                           <Label className="text-sm font-medium text-gray-500">Full Name</Label>
-                          <p className="text-gray-900">{dashboardData.ownerInfo.name}</p>
+                          <p className="text-gray-900">{userProfile.full_name}</p>
                         </div>
                       </div>
                       <div className="flex items-center space-x-3">
                         <Mail className="w-5 h-5 text-gray-400" />
                         <div>
                           <Label className="text-sm font-medium text-gray-500">Email</Label>
-                          <p className="text-gray-900">{dashboardData.ownerInfo.email}</p>
+                          <p className="text-gray-900">{userProfile.email}</p>
                         </div>
                       </div>
-                      <div className="md:col-span-2 flex items-start space-x-3">
-                        <MapPin className="w-5 h-5 text-gray-400 mt-1" />
+                      <div className="flex items-center space-x-3">
+                        <Phone className="w-5 h-5 text-gray-400" />
                         <div>
-                          <Label className="text-sm font-medium text-gray-500">Address</Label>
-                          <p className="text-gray-900">{dashboardData.ownerInfo.address}</p>
+                          <Label className="text-sm font-medium text-gray-500">Phone</Label>
+                          <p className="text-gray-900">{userProfile.phone || 'Not provided'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <Briefcase className="w-5 h-5 text-gray-400" />
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Role</Label>
+                          <p className="text-gray-900">{userProfile.role}</p>
                         </div>
                       </div>
                     </div>
@@ -848,12 +920,12 @@ export const Dashboard = () => {
                 </CardContent>
               </Card>
 
-              {/* Team Members Section - This is where the editable team members should be visible */}
+              {/* Team Members Section */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center space-x-2">
                     <Users className="w-5 h-5" />
-                    <span>Team Members ({teamMembers.length + members.length})</span>
+                    <span>Team Members ({teamMembers.length})</span>
                   </CardTitle>
                   <Button
                     onClick={handleAddTeamMember}
@@ -864,7 +936,7 @@ export const Dashboard = () => {
                   </Button>
                 </CardHeader>
                 <CardContent>
-                  {teamMembers.length === 0 && members.length === 0 ? (
+                  {teamMembers.length === 0 ? (
                     <div className="text-center py-12">
                       <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                       <h3 className="text-xl font-medium text-gray-900 mb-2">No team members yet</h3>
@@ -879,7 +951,6 @@ export const Dashboard = () => {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {/* Current Team Members (Editable) */}
                       {teamMembers.map((member) => (
                         <div key={member.id} className="border rounded-lg p-6 bg-white">
                           {editingMemberId === member.id ? (
@@ -1059,36 +1130,6 @@ export const Dashboard = () => {
                           )}
                         </div>
                       ))}
-
-                      {/* Legacy Team Members (Read-only) */}
-                      {members.map((member) => (
-                        <div key={member.id} className="flex items-center justify-between p-6 bg-blue-50 rounded-lg border border-blue-200">
-                          <div className="flex items-center space-x-4">
-                            <Avatar className="w-12 h-12">
-                              <AvatarFallback className="bg-blue-600 text-white">
-                                {getInitials(member.name)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <h4 className="font-semibold text-gray-900 text-lg">{member.name}</h4>
-                              <p className="text-gray-600">{member.email}</p>
-                              {member.phone && <p className="text-sm text-gray-600">{member.phone}</p>}
-                              {member.address && <p className="text-sm text-gray-600">{member.address}</p>}
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mt-2">
-                                Legacy Member
-                              </span>
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveMember(member.id)}
-                            className="text-red-600 hover:text-red-800 hover:bg-red-50"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
                     </div>
                   )}
                 </CardContent>
@@ -1173,6 +1214,18 @@ export const Dashboard = () => {
           )}
         </div>
       </div>
+      
+      {/* Form Modals */}
+      <BusinessFormationForm 
+        isOpen={isFormOpen} 
+        onClose={() => setIsFormOpen(false)}
+        onSubmitted={handleFormSubmitted}
+      />
+      
+      <PricingPackages 
+        isOpen={isPricingOpen}
+        onClose={() => setIsPricingOpen(false)}
+      />
       
       <Footer />
     </div>
