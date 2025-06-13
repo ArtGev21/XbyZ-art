@@ -30,6 +30,12 @@ interface BusinessProfile {
   status: string;
   created_at: string;
   user_id: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  description?: string;
 }
 
 interface Document {
@@ -43,7 +49,7 @@ interface Document {
 }
 
 export const AdminDashboard = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   
@@ -53,17 +59,19 @@ export const AdminDashboard = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedProfile, setSelectedProfile] = useState<BusinessProfile | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingProfiles, setIsLoadingProfiles] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
 
   // Check if user is admin
   useEffect(() => {
+    if (loading) return; // Wait for auth to load
+
     if (!user) {
       navigate('/');
       return;
     }
 
-    if (user.email !== 'info@xbyzeth.com') {
+    if (!isAdmin) {
       navigate('/');
       toast({
         title: "Access Denied",
@@ -74,10 +82,10 @@ export const AdminDashboard = () => {
     }
 
     loadBusinessProfiles();
-  }, [user, navigate, toast]);
+  }, [user, isAdmin, loading, navigate, toast]);
 
   const loadBusinessProfiles = async () => {
-    setIsLoading(true);
+    setIsLoadingProfiles(true);
     try {
       const { data, error } = await supabase
         .from('business_profiles')
@@ -96,7 +104,7 @@ export const AdminDashboard = () => {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsLoadingProfiles(false);
     }
   };
 
@@ -200,7 +208,7 @@ export const AdminDashboard = () => {
 
       toast({
         title: "Status Updated",
-        description: `Business profile status updated to ${newStatus}.`,
+        description: `Business profile status updated to ${newStatus.replace('_', ' ')}.`,
       });
     } catch (error) {
       console.error('Error updating status:', error);
@@ -232,6 +240,22 @@ export const AdminDashboard = () => {
     }
   };
 
+  // Show loading screen while checking authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white">
+        <Header />
+        <div className="pt-20 min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Loading...</h2>
+            <p className="text-gray-600">Verifying access permissions...</p>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <Header />
@@ -242,6 +266,9 @@ export const AdminDashboard = () => {
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
             <p className="text-gray-600">Manage business applications and documents</p>
+            <div className="mt-2 text-sm text-gray-500">
+              Logged in as: <span className="font-medium">{user?.email}</span>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -285,10 +312,12 @@ export const AdminDashboard = () => {
                 </CardHeader>
                 
                 <CardContent className="max-h-96 overflow-y-auto">
-                  {isLoading ? (
-                    <div className="text-center py-4">Loading...</div>
+                  {isLoadingProfiles ? (
+                    <div className="text-center py-4">Loading businesses...</div>
                   ) : filteredProfiles.length === 0 ? (
-                    <div className="text-center py-4 text-gray-500">No businesses found</div>
+                    <div className="text-center py-4 text-gray-500">
+                      {businessProfiles.length === 0 ? 'No businesses found' : 'No businesses match your search'}
+                    </div>
                   ) : (
                     <div className="space-y-3">
                       {filteredProfiles.map((profile) => (
@@ -362,6 +391,23 @@ export const AdminDashboard = () => {
                           <Label className="text-sm font-medium text-gray-500">Submitted</Label>
                           <p className="text-gray-900">{new Date(selectedProfile.created_at).toLocaleDateString()}</p>
                         </div>
+                        {selectedProfile.address_line1 && (
+                          <div className="md:col-span-2">
+                            <Label className="text-sm font-medium text-gray-500">Address</Label>
+                            <p className="text-gray-900">
+                              {selectedProfile.address_line1}
+                              {selectedProfile.address_line2 && <>, {selectedProfile.address_line2}</>}
+                              <br />
+                              {selectedProfile.city}, {selectedProfile.state} {selectedProfile.zip_code}
+                            </p>
+                          </div>
+                        )}
+                        {selectedProfile.description && (
+                          <div className="md:col-span-2">
+                            <Label className="text-sm font-medium text-gray-500">Description</Label>
+                            <p className="text-gray-900">{selectedProfile.description}</p>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
