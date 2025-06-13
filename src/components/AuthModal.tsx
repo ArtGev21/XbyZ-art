@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeClosed, ArrowLeft, Mail, Lock, User, CheckCircle, AlertCircle, Clock, Copy } from 'lucide-react';
+import { Eye, EyeClosed, ArrowLeft, Mail, Lock, User, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface AuthModalProps {
@@ -13,7 +13,7 @@ interface AuthModalProps {
   onClose: () => void;
 }
 
-type AuthStep = 'login' | 'register-email' | 'register-password' | 'forgot-password' | 'verify-code' | 'reset-password';
+type AuthStep = 'login' | 'register-email' | 'register-password' | 'forgot-password' | 'reset-password';
 
 interface PasswordStrength {
   score: number;
@@ -26,15 +26,13 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [verificationCode, setVerificationCode] = useState('');
-  const [generatedCode, setGeneratedCode] = useState(''); // Store the generated code
+  const [newPassword, setNewPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [passwordStrength, setPasswordStrength] = useState<PasswordStrength>({ score: 0, feedback: [], isValid: false });
-  const [codeExpiryTime, setCodeExpiryTime] = useState<number | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [rateLimitAttempts, setRateLimitAttempts] = useState(0);
   const [isRateLimited, setIsRateLimited] = useState(false);
   
@@ -44,30 +42,21 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
   // Rate limiting configuration
   const MAX_ATTEMPTS = 5;
   const RATE_LIMIT_DURATION = 15 * 60 * 1000; // 15 minutes
-  const CODE_EXPIRY_DURATION = 5 * 60 * 1000; // 5 minutes
 
-  // Timer for verification code expiry
+  // Check for password reset hash in URL
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const accessToken = hashParams.get('access_token');
+    const type = hashParams.get('type');
     
-    if (codeExpiryTime && currentStep === 'verify-code') {
-      interval = setInterval(() => {
-        const remaining = Math.max(0, codeExpiryTime - Date.now());
-        setTimeRemaining(remaining);
-        
-        if (remaining === 0) {
-          setCurrentStep('forgot-password');
-          setErrors({ general: 'Verification code has expired. Please request a new one.' });
-          setGeneratedCode('');
-          clearInterval(interval);
-        }
-      }, 1000);
+    if (type === 'recovery' && accessToken) {
+      setCurrentStep('reset-password');
+      toast({
+        title: "Password Reset Link Verified",
+        description: "Please enter your new password below.",
+      });
     }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [codeExpiryTime, currentStep]);
+  }, [isOpen]);
 
   // Rate limiting check
   useEffect(() => {
@@ -170,6 +159,13 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     }
   };
 
+  const handleNewPasswordChange = (password: string) => {
+    setNewPassword(password);
+    if (currentStep === 'reset-password') {
+      setPasswordStrength(validatePassword(password));
+    }
+  };
+
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
@@ -201,23 +197,15 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
       }
     }
 
-    if (currentStep === 'verify-code') {
-      if (!verificationCode) {
-        newErrors.verificationCode = 'Verification code is required';
-      } else if (verificationCode.length !== 6) {
-        newErrors.verificationCode = 'Verification code must be 6 digits';
-      }
-    }
-
     if (currentStep === 'reset-password') {
-      const strength = validatePassword(password);
+      const strength = validatePassword(newPassword);
       if (!strength.isValid) {
-        newErrors.password = 'Password does not meet requirements';
+        newErrors.newPassword = 'Password does not meet requirements';
       }
       
       if (!confirmPassword) {
         newErrors.confirmPassword = 'Please confirm your password';
-      } else if (password !== confirmPassword) {
+      } else if (newPassword !== confirmPassword) {
         newErrors.confirmPassword = 'Passwords do not match';
       }
     }
@@ -316,74 +304,25 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
     setIsLoading(true);
     try {
-      // Generate a 6-digit verification code
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      setGeneratedCode(code); // Store the code for display
-      
-      // Store the code and email in localStorage for verification
-      localStorage.setItem('reset_code', code);
-      localStorage.setItem('reset_email', email);
-      
-      // Set expiry time
-      const expiryTime = Date.now() + CODE_EXPIRY_DURATION;
-      setCodeExpiryTime(expiryTime);
-      localStorage.setItem('reset_code_expiry', expiryTime.toString());
-
-      toast({
-        title: "Verification Code Generated",
-        description: `Your verification code is displayed below. You have 5 minutes to use it.`,
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/`,
       });
-      
-      setCurrentStep('verify-code');
-    } catch (error) {
-      setErrors({ general: 'Failed to generate verification code. Please try again.' });
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  const handleVerifyCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validateForm()) return;
-
-    setIsLoading(true);
-    try {
-      const storedCode = localStorage.getItem('reset_code');
-      const storedEmail = localStorage.getItem('reset_email');
-      const storedExpiry = localStorage.getItem('reset_code_expiry');
-      
-      if (!storedCode || !storedEmail || !storedExpiry) {
-        setErrors({ general: 'Verification session expired. Please start over.' });
-        setCurrentStep('forgot-password');
-        setIsLoading(false);
-        return;
-      }
-
-      if (Date.now() > parseInt(storedExpiry)) {
-        setErrors({ general: 'Verification code has expired. Please request a new one.' });
-        setCurrentStep('forgot-password');
-        localStorage.removeItem('reset_code');
-        localStorage.removeItem('reset_email');
-        localStorage.removeItem('reset_code_expiry');
-        setGeneratedCode('');
-        setIsLoading(false);
-        return;
-      }
-
-      if (verificationCode !== storedCode) {
-        setErrors({ verificationCode: 'Invalid verification code. Please try again.' });
-        setIsLoading(false);
-        return;
+      if (error) {
+        throw error;
       }
 
       toast({
-        title: "Code Verified",
-        description: "Please set your new password.",
+        title: "Password Reset Email Sent! 📧",
+        description: "Please check your email inbox for the password reset link. The link will expire in 1 hour.",
       });
       
-      setCurrentStep('reset-password');
-    } catch (error) {
-      setErrors({ general: 'Verification failed. Please try again.' });
+      setCurrentStep('login');
+      setEmail('');
+      setPassword('');
+    } catch (error: any) {
+      console.error('Password reset error:', error);
+      setErrors({ general: error.message || 'Failed to send reset email. Please try again.' });
     } finally {
       setIsLoading(false);
     }
@@ -395,46 +334,31 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
     setIsLoading(true);
     try {
-      const storedEmail = localStorage.getItem('reset_email');
-      
-      if (!storedEmail) {
-        setErrors({ general: 'Session expired. Please start over.' });
-        setCurrentStep('forgot-password');
-        setIsLoading(false);
-        return;
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) {
+        throw error;
       }
 
-      // In a real app, you would update the password via your backend API
-      // For now, we'll simulate a successful password reset
-      
-      // Clean up stored data
-      localStorage.removeItem('reset_code');
-      localStorage.removeItem('reset_email');
-      localStorage.removeItem('reset_code_expiry');
-      setGeneratedCode('');
-      
       toast({
-        title: "Password Reset Successful",
-        description: "Your password has been updated. You can now log in with your new password.",
+        title: "Password Updated Successfully! ✅",
+        description: "Your password has been changed. You can now log in with your new password.",
       });
       
+      // Clear URL hash
+      window.history.replaceState(null, '', window.location.pathname);
+      
       setCurrentStep('login');
-      setPassword('');
+      setNewPassword('');
       setConfirmPassword('');
-      setVerificationCode('');
-    } catch (error) {
-      setErrors({ general: 'Failed to reset password. Please try again.' });
+    } catch (error: any) {
+      console.error('Password update error:', error);
+      setErrors({ general: error.message || 'Failed to update password. Please try again.' });
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const copyCodeToClipboard = () => {
-    navigator.clipboard.writeText(generatedCode);
-    toast({
-      title: "Code Copied",
-      description: "Verification code copied to clipboard.",
-    });
   };
 
   const handleClose = () => {
@@ -442,19 +366,10 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     setEmail('');
     setPassword('');
     setConfirmPassword('');
-    setVerificationCode('');
-    setGeneratedCode('');
+    setNewPassword('');
     setErrors({});
     setPasswordStrength({ score: 0, feedback: [], isValid: false });
-    setCodeExpiryTime(null);
-    setTimeRemaining(0);
     onClose();
-  };
-
-  const formatTime = (milliseconds: number): string => {
-    const minutes = Math.floor(milliseconds / 60000);
-    const seconds = Math.floor((milliseconds % 60000) / 1000);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const getPasswordStrengthColor = (score: number): string => {
@@ -755,7 +670,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
               <p className="text-blue-600 text-sm">
-                Enter your email address and we'll generate a verification code for you to reset your password.
+                📧 Enter your email address and we'll send you a secure link to reset your password.
               </p>
             </div>
 
@@ -787,102 +702,15 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
               disabled={isLoading} 
               className="w-full bg-custom-dark-maroon hover:bg-custom-deep-maroon"
             >
-              {isLoading ? 'Generating Code...' : 'Generate Verification Code'}
-            </Button>
-          </form>
-        );
-
-      case 'verify-code':
-        return (
-          <form onSubmit={handleVerifyCode} className="space-y-4">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setCurrentStep('forgot-password')}
-              className="p-0 h-auto text-custom-dark-maroon hover:bg-transparent"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
+              {isLoading ? 'Sending Email...' : 'Send Reset Email'}
             </Button>
 
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-              <p className="text-blue-600 text-sm">
-                We've generated a verification code for <strong>{email}</strong>
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+              <p className="text-gray-600 text-sm">
+                ✅ <strong>Real Email Delivery:</strong> You will receive an actual email with a secure reset link.<br/>
+                ⏰ <strong>Link Expires:</strong> The reset link will expire in 1 hour for security.<br/>
+                📱 <strong>Check Spam:</strong> If you don't see the email, please check your spam folder.
               </p>
-            </div>
-
-            {/* Display the generated code for testing */}
-            {generatedCode && (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-green-800 font-medium text-sm">Your Verification Code:</p>
-                    <p className="text-green-900 font-mono text-2xl tracking-widest">{generatedCode}</p>
-                    <p className="text-green-600 text-xs mt-1">
-                      ⚠️ In production, this would be sent to your email
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={copyCodeToClipboard}
-                    className="ml-2"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {timeRemaining > 0 && (
-              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                <div className="flex items-center space-x-2">
-                  <Clock className="w-4 h-4 text-yellow-600" />
-                  <p className="text-yellow-600 text-sm">
-                    Code expires in: <strong>{formatTime(timeRemaining)}</strong>
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div>
-              <Label htmlFor="verification-code">Verification Code *</Label>
-              <Input
-                id="verification-code"
-                type="text"
-                value={verificationCode}
-                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="Enter 6-digit code"
-                className={`text-center text-lg tracking-widest ${errors.verificationCode ? 'border-red-500' : ''}`}
-                maxLength={6}
-                required
-              />
-              {errors.verificationCode && <p className="text-red-500 text-sm mt-1">{errors.verificationCode}</p>}
-            </div>
-
-            {errors.general && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-red-600 text-sm">{errors.general}</p>
-              </div>
-            )}
-
-            <Button 
-              type="submit" 
-              disabled={isLoading || verificationCode.length !== 6} 
-              className="w-full bg-custom-dark-maroon hover:bg-custom-deep-maroon"
-            >
-              {isLoading ? 'Verifying...' : 'Verify Code'}
-            </Button>
-
-            <div className="text-center">
-              <button
-                type="button"
-                onClick={() => setCurrentStep('forgot-password')}
-                className="text-sm text-custom-dark-maroon hover:underline"
-              >
-                Generate a new code
-              </button>
             </div>
           </form>
         );
@@ -894,7 +722,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
               <div className="flex items-center space-x-2">
                 <CheckCircle className="w-4 h-4 text-green-600" />
                 <p className="text-green-600 text-sm">
-                  Code verified! Please set your new password.
+                  ✅ Reset link verified! Please enter your new password below.
                 </p>
               </div>
             </div>
@@ -905,23 +733,23 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
                   id="new-password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => handlePasswordChange(e.target.value)}
-                  placeholder="Enter new password"
-                  className={`pl-10 pr-10 ${errors.password ? 'border-red-500' : ''}`}
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => handleNewPasswordChange(e.target.value)}
+                  placeholder="Enter your new password"
+                  className={`pl-10 pr-10 ${errors.newPassword ? 'border-red-500' : ''}`}
                   required
                 />
                 <button 
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowNewPassword(!showNewPassword)}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
                 >
-                  {showPassword ? <EyeClosed className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showNewPassword ? <EyeClosed className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
               
-              {password && (
+              {newPassword && (
                 <div className="mt-2">
                   <div className="flex items-center space-x-2 mb-2">
                     <div className="flex-1 bg-gray-200 rounded-full h-2">
@@ -946,7 +774,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
                 </div>
               )}
               
-              {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
+              {errors.newPassword && <p className="text-red-500 text-sm mt-1">{errors.newPassword}</p>}
             </div>
 
             <div>
@@ -958,7 +786,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm new password"
+                  placeholder="Confirm your new password"
                   className={`pl-10 pr-10 ${errors.confirmPassword ? 'border-red-500' : ''}`}
                   required
                 />
@@ -971,9 +799,9 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
                 </button>
               </div>
               
-              {confirmPassword && password && (
+              {confirmPassword && newPassword && (
                 <div className="mt-1 flex items-center space-x-2">
-                  {password === confirmPassword ? (
+                  {newPassword === confirmPassword ? (
                     <>
                       <CheckCircle className="w-4 h-4 text-green-500" />
                       <span className="text-sm text-green-600">Passwords match</span>
@@ -998,7 +826,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
             <Button 
               type="submit" 
-              disabled={isLoading || !passwordStrength.isValid || password !== confirmPassword} 
+              disabled={isLoading || !passwordStrength.isValid || newPassword !== confirmPassword} 
               className="w-full bg-custom-dark-maroon hover:bg-custom-deep-maroon"
             >
               {isLoading ? 'Updating Password...' : 'Update Password'}
@@ -1017,7 +845,6 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
       case 'register-email': return 'Create Account - Step 1';
       case 'register-password': return 'Create Account - Step 2';
       case 'forgot-password': return 'Reset Password';
-      case 'verify-code': return 'Verify Code';
       case 'reset-password': return 'Set New Password';
       default: return 'Authentication';
     }
