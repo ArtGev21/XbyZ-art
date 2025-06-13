@@ -25,7 +25,9 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  AlertCircle
+  AlertCircle,
+  FileUp,
+  Check
 } from 'lucide-react';
 
 interface BusinessProfile {
@@ -147,6 +149,14 @@ export const AdminDashboard = () => {
       console.log('Loaded business profiles:', data);
       setBusinessProfiles(data || []);
       setFilteredProfiles(data || []);
+      
+      // Show success message with count
+      if (data && data.length > 0) {
+        toast({
+          title: "Applications Loaded",
+          description: `Found ${data.length} business application(s) in the database.`,
+        });
+      }
     } catch (error) {
       console.error('Error loading business profiles:', error);
       toast({
@@ -159,11 +169,11 @@ export const AdminDashboard = () => {
     }
   };
 
-  // Filter profiles based on search and filters
+  // Enhanced search with better filtering
   useEffect(() => {
     let filtered = businessProfiles;
 
-    // Search filter
+    // Search filter - more comprehensive search
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(profile => 
@@ -172,7 +182,9 @@ export const AdminDashboard = () => {
         profile.business_type.toLowerCase().includes(searchLower) ||
         profile.phone.includes(searchTerm) ||
         profile.city.toLowerCase().includes(searchLower) ||
-        profile.zip_code.includes(searchTerm)
+        profile.zip_code.includes(searchTerm) ||
+        (profile.description && profile.description.toLowerCase().includes(searchLower)) ||
+        (profile.tax_id && profile.tax_id.includes(searchTerm))
       );
     }
 
@@ -187,6 +199,11 @@ export const AdminDashboard = () => {
     }
 
     setFilteredProfiles(filtered);
+    
+    // Auto-select first result if searching and results found
+    if (searchTerm && filtered.length > 0 && !selectedProfile) {
+      handleProfileSelect(filtered[0]);
+    }
   }, [searchTerm, statusFilter, businessTypeFilter, businessProfiles]);
 
   const loadUserProfile = async (userId: string) => {
@@ -224,37 +241,97 @@ export const AdminDashboard = () => {
   };
 
   const loadDocuments = async (profileId: string) => {
-    // Mock documents for demonstration - in a real app, this would come from a documents table
-    const mockDocs: Document[] = [
-      {
-        id: '1',
-        business_profile_id: profileId,
-        name: 'Articles of Organization',
-        status: 'pending',
-        type: 'formation'
-      },
-      {
-        id: '2',
-        business_profile_id: profileId,
-        name: 'Operating Agreement',
-        status: 'pending',
-        type: 'agreement'
-      },
-      {
-        id: '3',
-        business_profile_id: profileId,
-        name: 'Tax ID (EIN) Certificate',
-        status: 'pending',
-        type: 'tax'
-      },
-      {
-        id: '4',
-        business_profile_id: profileId,
-        name: 'Compliance Calendar',
-        status: 'ready',
-        type: 'compliance'
-      }
-    ];
+    // Enhanced mock documents based on business type
+    const profile = selectedProfile;
+    let mockDocs: Document[] = [];
+
+    if (profile?.business_type === 'llc') {
+      mockDocs = [
+        {
+          id: '1',
+          business_profile_id: profileId,
+          name: 'Articles of Organization',
+          status: 'pending',
+          type: 'formation'
+        },
+        {
+          id: '2',
+          business_profile_id: profileId,
+          name: 'Operating Agreement',
+          status: 'pending',
+          type: 'agreement'
+        },
+        {
+          id: '3',
+          business_profile_id: profileId,
+          name: 'Tax ID (EIN) Certificate',
+          status: 'ready',
+          type: 'tax'
+        },
+        {
+          id: '4',
+          business_profile_id: profileId,
+          name: 'Compliance Calendar',
+          status: 'ready',
+          type: 'compliance'
+        }
+      ];
+    } else if (profile?.business_type === 'corporation') {
+      mockDocs = [
+        {
+          id: '1',
+          business_profile_id: profileId,
+          name: 'Articles of Incorporation',
+          status: 'pending',
+          type: 'formation'
+        },
+        {
+          id: '2',
+          business_profile_id: profileId,
+          name: 'Corporate Bylaws',
+          status: 'pending',
+          type: 'agreement'
+        },
+        {
+          id: '3',
+          business_profile_id: profileId,
+          name: 'Tax ID (EIN) Certificate',
+          status: 'ready',
+          type: 'tax'
+        },
+        {
+          id: '4',
+          business_profile_id: profileId,
+          name: 'Stock Certificates',
+          status: 'pending',
+          type: 'stock'
+        }
+      ];
+    } else {
+      mockDocs = [
+        {
+          id: '1',
+          business_profile_id: profileId,
+          name: 'Business Registration',
+          status: 'pending',
+          type: 'formation'
+        },
+        {
+          id: '2',
+          business_profile_id: profileId,
+          name: 'Tax ID (EIN) Certificate',
+          status: 'ready',
+          type: 'tax'
+        },
+        {
+          id: '3',
+          business_profile_id: profileId,
+          name: 'Compliance Calendar',
+          status: 'ready',
+          type: 'compliance'
+        }
+      ];
+    }
     
     setDocuments(mockDocs);
   };
@@ -270,8 +347,18 @@ export const AdminDashboard = () => {
         loadTeamMembers(profile.user_id),
         loadDocuments(profile.id)
       ]);
+      
+      toast({
+        title: "Application Loaded",
+        description: `Viewing details for ${profile.business_name}`,
+      });
     } catch (error) {
       console.error('Error loading profile details:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load some profile details.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoadingDetails(false);
     }
@@ -280,20 +367,52 @@ export const AdminDashboard = () => {
   const handleDocumentUpload = async (docId: string, docName: string) => {
     setUploadingDoc(docId);
     
-    // Simulate file upload process
-    setTimeout(() => {
-      setDocuments(prev => prev.map(doc => 
-        doc.id === docId 
-          ? { ...doc, status: 'ready' as const, uploaded_at: new Date().toISOString() }
-          : doc
-      ));
-      
-      setUploadingDoc(null);
-      toast({
-        title: "Document Uploaded",
-        description: `${docName} has been uploaded and is ready for client download.`,
-      });
-    }, 2000);
+    // Create a file input element
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png';
+    fileInput.multiple = false;
+    
+    fileInput.onchange = async (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (!file) {
+        setUploadingDoc(null);
+        return;
+      }
+
+      try {
+        // Simulate file upload process
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Update document status
+        setDocuments(prev => prev.map(doc => 
+          doc.id === docId 
+            ? { 
+                ...doc, 
+                status: 'ready' as const, 
+                uploaded_at: new Date().toISOString(),
+                file_url: `uploads/${file.name}` 
+              }
+            : doc
+        ));
+        
+        toast({
+          title: "Document Uploaded Successfully",
+          description: `${docName} has been uploaded and is now ready for client download.`,
+        });
+      } catch (error) {
+        console.error('Upload error:', error);
+        toast({
+          title: "Upload Failed",
+          description: "Failed to upload document. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setUploadingDoc(null);
+      }
+    };
+    
+    fileInput.click();
   };
 
   const updateProfileStatus = async (profileId: string, newStatus: string) => {
@@ -485,7 +604,7 @@ export const AdminDashboard = () => {
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                       <Input
-                        placeholder="Search by name, email, phone, city..."
+                        placeholder="Search by business name, email, phone..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="pl-10"
@@ -532,7 +651,19 @@ export const AdminDashboard = () => {
                     </div>
                   ) : filteredProfiles.length === 0 ? (
                     <div className="text-center py-4 text-gray-500">
-                      {businessProfiles.length === 0 ? 'No applications found' : 'No applications match your search'}
+                      {businessProfiles.length === 0 ? (
+                        <div>
+                          <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                          <p className="font-medium">No applications found</p>
+                          <p className="text-sm">No business applications have been submitted yet.</p>
+                        </div>
+                      ) : (
+                        <div>
+                          <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                          <p className="font-medium">No matches found</p>
+                          <p className="text-sm">Try adjusting your search or filters.</p>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -762,23 +893,30 @@ export const AdminDashboard = () => {
                             <FileText className="w-5 h-5" />
                             <span>Document Management</span>
                           </CardTitle>
+                          <p className="text-sm text-gray-600">
+                            Upload and manage documents for {selectedProfile.business_name}
+                          </p>
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-4">
                             {documents.map((doc) => (
-                              <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg">
+                              <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
                                 <div className="flex items-center space-x-4">
-                                  <FileText className="w-8 h-8 text-gray-400" />
+                                  <div className="p-2 bg-gray-100 rounded-lg">
+                                    <FileText className="w-6 h-6 text-gray-600" />
+                                  </div>
                                   <div>
                                     <h4 className="font-medium text-gray-900">{doc.name}</h4>
-                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getDocStatusColor(doc.status)}`}>
-                                      {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
-                                    </span>
-                                    {doc.uploaded_at && (
-                                      <p className="text-xs text-gray-500 mt-1">
-                                        Uploaded: {new Date(doc.uploaded_at).toLocaleDateString()}
-                                      </p>
-                                    )}
+                                    <div className="flex items-center space-x-2 mt-1">
+                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getDocStatusColor(doc.status)}`}>
+                                        {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
+                                      </span>
+                                      {doc.uploaded_at && (
+                                        <span className="text-xs text-gray-500">
+                                          Uploaded: {new Date(doc.uploaded_at).toLocaleDateString()}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                                 <div className="flex items-center space-x-2">
@@ -789,8 +927,17 @@ export const AdminDashboard = () => {
                                       disabled={uploadingDoc === doc.id}
                                       className="bg-custom-dark-maroon hover:bg-custom-deep-maroon"
                                     >
-                                      <Upload className="w-4 h-4 mr-2" />
-                                      {uploadingDoc === doc.id ? 'Uploading...' : 'Upload'}
+                                      {uploadingDoc === doc.id ? (
+                                        <>
+                                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                          Uploading...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <FileUp className="w-4 h-4 mr-2" />
+                                          Upload File
+                                        </>
+                                      )}
                                     </Button>
                                   ) : (
                                     <Button
@@ -803,8 +950,8 @@ export const AdminDashboard = () => {
                                         });
                                       }}
                                     >
-                                      <Download className="w-4 h-4 mr-2" />
-                                      Ready
+                                      <Check className="w-4 h-4 mr-2" />
+                                      Ready for Download
                                     </Button>
                                   )}
                                 </div>
@@ -813,11 +960,12 @@ export const AdminDashboard = () => {
                           </div>
                           
                           <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                            <h4 className="font-medium text-blue-900 mb-2">Document Status Guide</h4>
+                            <h4 className="font-medium text-blue-900 mb-2">Document Upload Instructions</h4>
                             <ul className="text-sm text-blue-800 space-y-1">
-                              <li><strong>Pending:</strong> Document needs to be prepared and uploaded</li>
+                              <li><strong>Pending:</strong> Click "Upload File" to select and upload the document</li>
                               <li><strong>Ready:</strong> Document is uploaded and available for client download</li>
                               <li><strong>Completed:</strong> Client has downloaded the document</li>
+                              <li><strong>Supported formats:</strong> PDF, DOC, DOCX, JPG, JPEG, PNG</li>
                             </ul>
                           </div>
                         </CardContent>
@@ -832,6 +980,11 @@ export const AdminDashboard = () => {
                       <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                       <h3 className="text-lg font-medium text-gray-900 mb-2">Select an Application</h3>
                       <p className="text-gray-600">Choose a business application from the list to view details and manage documents.</p>
+                      {businessProfiles.length > 0 && (
+                        <p className="text-sm text-gray-500 mt-2">
+                          Found {businessProfiles.length} application(s) in the database.
+                        </p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
