@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { BusinessFormationForm } from "@/components/BusinessFormationForm";
 import { AuthModal } from "@/components/AuthModal";
 import { PricingPackages } from "@/components/PricingPackages";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 export const Header = () => {
   const { isAuthenticated, logout, loading } = useAuth();
@@ -16,6 +16,7 @@ export const Header = () => {
   const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [hasSubmittedInfo, setHasSubmittedInfo] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     // Check if user has submitted information
@@ -41,11 +42,30 @@ export const Header = () => {
   };
 
   const handleNavClick = (sectionId: string) => {
-    const section = document.getElementById(sectionId);
-    if (section) {
-      section.scrollIntoView({ behavior: 'smooth' });
-    }
+    // Close mobile menu
     setIsMenuOpen(false);
+    
+    // If we're not on the home page, navigate to home first
+    if (location.pathname !== '/') {
+      navigate('/');
+      // Wait for navigation to complete, then scroll to section
+      setTimeout(() => {
+        const section = document.getElementById(sectionId);
+        if (section) {
+          section.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    } else {
+      // We're already on home page, just scroll to section
+      const section = document.getElementById(sectionId);
+      if (section) {
+        section.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  };
+
+  const handleLogoClick = () => {
+    navigate('/');
   };
 
   useEffect(() => {
@@ -78,7 +98,7 @@ export const Header = () => {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
             <button 
-              onClick={() => handleNavClick('/')}  
+              onClick={handleLogoClick}  
               className="flex items-center focus:outline-2 focus:outline-offset-2 focus:outline-custom-dark-maroon" 
               aria-label="Home"
             >
