@@ -314,6 +314,27 @@ export const BusinessFormationForm = ({ isOpen, onClose, onSubmitted }: Business
         throw error;
       }
 
+      // Store form data in session storage for PricingPackages component
+      const businessFormDataForPricing = {
+        businessName: formData.businessName,
+        businessType: formData.businessType,
+        businessAddress: formData.businessAddress,
+        addressLine2: null,
+        city: formData.businessCity,
+        state: formData.businessState,
+        zipCode: formData.businessZipCode,
+        phoneNumber: formData.businessPhone,
+        businessEmail: formData.businessEmail,
+        businessDescription: formData.businessDescription,
+        ownerName: formData.ownerName,
+        ownerAddress: formData.ownerAddress,
+        ownerEmail: formData.ownerEmail,
+        ssnItin: formData.ownerSsnItin,
+        members: formData.members
+      };
+
+      sessionStorage.setItem('businessFormData', JSON.stringify(businessFormDataForPricing));
+
       toast({
         title: "Application Submitted Successfully!",
         description: "Your business formation application has been submitted for review.",
