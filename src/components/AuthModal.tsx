@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeClosed, ArrowLeft, Mail, Lock, User, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { Eye, EyeClosed, ArrowLeft, Mail, Lock, User, CheckCircle, AlertCircle, Clock, Copy } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface AuthModalProps {
@@ -27,6 +27,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
+  const [generatedCode, setGeneratedCode] = useState(''); // Store the generated code
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -57,6 +58,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
         if (remaining === 0) {
           setCurrentStep('forgot-password');
           setErrors({ general: 'Verification code has expired. Please request a new one.' });
+          setGeneratedCode('');
           clearInterval(interval);
         }
       }, 1000);
@@ -316,9 +318,9 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     try {
       // Generate a 6-digit verification code
       const code = Math.floor(100000 + Math.random() * 900000).toString();
+      setGeneratedCode(code); // Store the code for display
       
       // Store the code and email in localStorage for verification
-      // In a real app, this would be sent via email and stored securely on the server
       localStorage.setItem('reset_code', code);
       localStorage.setItem('reset_email', email);
       
@@ -327,17 +329,14 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
       setCodeExpiryTime(expiryTime);
       localStorage.setItem('reset_code_expiry', expiryTime.toString());
 
-      // Simulate sending email (in real app, this would call your email service)
-      console.log(`Verification code for ${email}: ${code}`);
-      
       toast({
-        title: "Verification Code Sent",
-        description: `A 6-digit verification code has been sent to ${email}. You have 5 minutes to use it.`,
+        title: "Verification Code Generated",
+        description: `Your verification code is displayed below. You have 5 minutes to use it.`,
       });
       
       setCurrentStep('verify-code');
     } catch (error) {
-      setErrors({ general: 'Failed to send verification code. Please try again.' });
+      setErrors({ general: 'Failed to generate verification code. Please try again.' });
     } finally {
       setIsLoading(false);
     }
@@ -366,6 +365,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
         localStorage.removeItem('reset_code');
         localStorage.removeItem('reset_email');
         localStorage.removeItem('reset_code_expiry');
+        setGeneratedCode('');
         setIsLoading(false);
         return;
       }
@@ -411,6 +411,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
       localStorage.removeItem('reset_code');
       localStorage.removeItem('reset_email');
       localStorage.removeItem('reset_code_expiry');
+      setGeneratedCode('');
       
       toast({
         title: "Password Reset Successful",
@@ -428,12 +429,21 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     }
   };
 
+  const copyCodeToClipboard = () => {
+    navigator.clipboard.writeText(generatedCode);
+    toast({
+      title: "Code Copied",
+      description: "Verification code copied to clipboard.",
+    });
+  };
+
   const handleClose = () => {
     setCurrentStep('login');
     setEmail('');
     setPassword('');
     setConfirmPassword('');
     setVerificationCode('');
+    setGeneratedCode('');
     setErrors({});
     setPasswordStrength({ score: 0, feedback: [], isValid: false });
     setCodeExpiryTime(null);
@@ -745,7 +755,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
               <p className="text-blue-600 text-sm">
-                Enter your email address and we'll send you a verification code to reset your password.
+                Enter your email address and we'll generate a verification code for you to reset your password.
               </p>
             </div>
 
@@ -777,7 +787,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
               disabled={isLoading} 
               className="w-full bg-custom-dark-maroon hover:bg-custom-deep-maroon"
             >
-              {isLoading ? 'Sending Code...' : 'Send Verification Code'}
+              {isLoading ? 'Generating Code...' : 'Generate Verification Code'}
             </Button>
           </form>
         );
@@ -797,9 +807,33 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
               <p className="text-blue-600 text-sm">
-                We've sent a 6-digit verification code to <strong>{email}</strong>
+                We've generated a verification code for <strong>{email}</strong>
               </p>
             </div>
+
+            {/* Display the generated code for testing */}
+            {generatedCode && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-green-800 font-medium text-sm">Your Verification Code:</p>
+                    <p className="text-green-900 font-mono text-2xl tracking-widest">{generatedCode}</p>
+                    <p className="text-green-600 text-xs mt-1">
+                      ⚠️ In production, this would be sent to your email
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={copyCodeToClipboard}
+                    className="ml-2"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {timeRemaining > 0 && (
               <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
@@ -847,7 +881,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
                 onClick={() => setCurrentStep('forgot-password')}
                 className="text-sm text-custom-dark-maroon hover:underline"
               >
-                Didn't receive the code? Send again
+                Generate a new code
               </button>
             </div>
           </form>
