@@ -548,9 +548,6 @@ export const Dashboard = () => {
           {/* User Profile Section */}
           <div className="p-6 border-b border-gray-200">
             <div className="text-center mb-4">
-              <h1 className="text-xl font-bold text-gray-900 mb-1">
-                Welcome to your dashboard,
-              </h1>
               <p className="text-lg text-custom-dark-maroon font-semibold">
                 {userProfile.full_name}!
               </p>
